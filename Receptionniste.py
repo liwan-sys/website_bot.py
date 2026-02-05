@@ -11,57 +11,56 @@ except ImportError:
     st.stop()
 
 # ==============================================================================
-# 2. DESIGN & IDENTITÉ VISUELLE (DA SITE WEB)
+# 2. DESIGN & IDENTITÉ VISUELLE (CONFORME AU SITE WEB)
 # ==============================================================================
 st.set_page_config(page_title="Sarah - SVB", page_icon="🧡", layout="centered")
 
 st.markdown("""
 <style>
-    /* IMPORT POLICES */
+    /* POLICES : Dancing Script (Titre) & Lato (Texte) comme sur le site */
     @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Lato:wght@400;700&display=swap');
 
-    /* FOND DÉGRADÉ (SAUGE / CRÈME) */
+    /* FOND DÉGRADÉ VERT SAUGE / CRÈME */
     .stApp {
         background: linear-gradient(180deg, #F9F7F2 0%, #E6F0E6 100%);
         font-family: 'Lato', sans-serif;
+        color: #4A4A4A;
     }
     
-    /* MASQUER LES ÉLÉMENTS STREAMLIT */
     #MainMenu, footer, header {visibility: hidden;}
 
-    /* TITRE SARAH STYLISÉ */
+    /* TITRE */
     h1 {
         font-family: 'Dancing Script', cursive;
-        color: #8FB592; /* Vert Sauge */
+        color: #8FB592;
         text-align: center;
         font-size: 3.5rem !important;
-        margin-bottom: 0px !important;
         text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
     }
     .subtitle {
         text-align: center;
-        color: #EBC6A6; /* Pêche */
-        font-size: 1.2rem;
+        color: #EBC6A6;
+        font-size: 1.1rem;
         font-weight: bold;
-        margin-bottom: 30px;
+        margin-bottom: 25px;
         text-transform: uppercase;
         letter-spacing: 2px;
     }
 
-    /* --- CORRECTION VISIBILITÉ --- */
-    /* BULLES DE CHAT : FORCE LE TEXTE EN NOIR MÊME EN MODE NUIT */
+    /* BULLES DE CHAT */
     .stChatMessage {
-        background-color: rgba(255, 255, 255, 0.95) !important;
+        background-color: rgba(255, 255, 255, 0.95);
         border: 1px solid #EBC6A6;
         border-radius: 15px;
         padding: 15px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        color: #1f1f1f !important; /* IMPORTANT : Texte gris foncé */
+        color: #1f1f1f !important; /* Force le noir pour lisibilité */
+        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
     }
     
-    /* Force la couleur des paragraphes dans les bulles */
     .stChatMessage p, .stChatMessage li {
         color: #1f1f1f !important;
+        font-size: 1rem;
+        line-height: 1.6;
     }
 
     /* BOUTON WHATSAPP */
@@ -69,100 +68,120 @@ st.markdown("""
         background: linear-gradient(90deg, #25D366 0%, #128C7E 100%);
         color: white !important;
         border: none;
-        border-radius: 25px;
-        padding: 12px;
+        border-radius: 50px;
+        padding: 12px 25px;
         font-weight: bold;
         width: 100%;
-        transition: transform 0.2s;
+        text-transform: uppercase;
+        letter-spacing: 1px;
     }
     .stButton button:hover {
         transform: scale(1.02);
+        box-shadow: 0 5px 15px rgba(37, 211, 102, 0.3);
     }
 </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 3. LA BIBLE SVB - VERSION FUSION (INTELLIGENTE & NEUTRE)
+# 3. LA BIBLE DU STUDIO - VERSION "ANALYSE SITE WEB"
 # ==============================================================================
 
 INFO_STUDIO = """
 ********************************************************************************
-SECTION A : L'EXPÉRIENCE STUDIO (SERVICE TOUT INCLUS)
+SECTION A : L'IDENTITÉ & LES SERVICES (DATA SITE WEB)
 ********************************************************************************
 NOM : SVB (Santez-Vous Bien).
 CONTACT : WhatsApp uniquement (07 44 91 91 55).
-POSITIONNEMENT : Studio Premium, Semi-Privé, Suivi personnalisé.
+POSITIONNEMENT : Studio Premium, "Lieu de vie", Semi-Privé.
 
-LE SERVICE CONFORT "HÔTEL" :
-Argument clé : "Le client vient les mains vides."
-- Douches : Disponibles dans les 2 studios.
-- Fourni sur place : Serviettes de bain, Gel douche, Shampoing, Sèche-cheveux.
+💎 LE SERVICE PREMIUM ("COMME À L'HÔTEL") :
+C'est un argument fort du site.
+- DOUCHES : Oui, disponibles dans les 2 studios (Lavandières & Docks).
+- TOUT INCLUS : Serviettes de bain, Gel douche, Shampoing, Sèche-cheveux, Déodorant.
+- PHRASE CLÉ : "Venez les mains vides, repartez frais et dispo."
 
 ********************************************************************************
-SECTION B : LES DEUX ADRESSES (NE PAS SE TROMPER)
+SECTION B : LES DEUX STUDIOS (DISTINCTION CLAIRE)
 ********************************************************************************
-📍 STUDIO "LAVANDIÈRES" (40 Cours des Lavandières)
-- Ambiance : Zen, Concentration.
-- Activités : Pilates Reformer (Machine), Crossformer (Machine), Yoga, Pilates Tapis.
-- Obligation : Chaussettes antidérapantes.
+📍 STUDIO 1 : "COURS DES LAVANDIÈRES" (L'ESPACE ZEN)
+- Adresse : 40 Cours des Lavandières, 93400 Saint-Ouen.
+- Ambiance : Feutrée, Apaisante, Cocon.
+- Activités : 
+  * Pilates Reformer (Machine)
+  * Pilates Crossformer (Machine)
+  * Yoga (Vinyasa, Hatha)
+  * Pilates Tapis.
+- Équipement : Chaussettes antidérapantes OBLIGATOIRES.
 
-📍 STUDIO "DOCKS" (6 Mail André Breton)
-- Ambiance : Intensité, Énergie.
-- Activités : Cross Training, Boxe, Danse (Afrodanc'All), Yoga Kids, Cross Yoga.
+📍 STUDIO 2 : "PARC DES DOCKS" (L'ESPACE ÉNERGIE)
+- Adresse : 6 Mail André Breton, 93400 Saint-Ouen.
+- Ambiance : Moderne, Dynamique.
+- Activités : 
+  * Cross Training (HIIT)
+  * Boxe & Cardio
+  * Danse (Afrodanc'All)
+  * Yoga Kids / Training Kids.
 - Note : Situé à 5 min à pied du premier studio.
 
 ********************************************************************************
-SECTION C : RÈGLEMENT INTÉRIEUR & GESTION (STRICT)
+SECTION C : RÈGLEMENT & GESTION DES MEMBRES
 ********************************************************************************
 
-🛑 1. AJOUT DE SÉANCE HORS FORFAIT
-- Règle : Possible pour tout abonné.
-- Tarif : 30€ la séance à l'unité.
+🛑 1. PRIX À L'UNITÉ (LA RÈGLE SUBTILE DU SITE)
+- PRIX PUBLIC (Non-Membre) :
+  * Séance Reformer / Crossformer = 50€ (Affiché sur le site).
+  * Séance Cross / Focus = 30€.
+- PRIX MEMBRE (Ajout sur forfait) :
+  * Tarif unique privilège = 30€ (Quelle que soit l'activité).
 
-🛑 2. MODIFICATION D'ABONNEMENT (RÈGLE FINANCIÈRE)
-- UPGRADE (Passer à un forfait supérieur) : Possible IMMÉDIATEMENT.
-- DOWNGRADE (Passer à un forfait inférieur) : STRICTEMENT INTERDIT pendant les 3 mois d'engagement. Possible après (préavis 1 mois).
+🛑 2. MODIFICATION D'ABONNEMENT
+- UPGRADE (Monter en gamme) : Possible tout de suite.
+- DOWNGRADE (Baisser en gamme) : INTERDIT pendant les 3 mois d'engagement.
 
-🛑 3. SUSPENSION (PAUSE VACANCES)
-- Si Option BOOST : Suspension immédiate et libre.
-- Si Standard : Suspension possible UNIQUEMENT si absence > 10 jours ET Préavis d'un mois.
+🛑 3. SUSPENSION (PAUSE)
+- OPTION BOOST : Suspension immédiate et illimitée.
+- STANDARD (Sans Boost) : Préavis 1 mois + Absence > 10 jours requise.
 
 🛑 4. RETARD & ANNULATION
-- Retard : Refusé après 5 min (Porte fermée).
-- Annulation : 1h avant (Collectif) / 24h avant (Privé). Sinon perdu.
+- Retard : Tolérance 0 après 5 minutes (Porte fermée).
+- Annulation : 1h avant (Collectif) / 24h avant (Privé).
 
-🛑 5. CUMUL
-- Possible de cumuler 2 abonnements (ex: Reformer + Boxe).
+🛑 5. CUMUL (STRATÉGIE COMMERCIALE)
+- "Je veux faire Reformer + Boxe" -> Proposer 2 abonnements (Pass Reformer + Pass Focus). C'est la meilleure flexibilité.
 
 ********************************************************************************
-SECTION D : GRILLE TARIFAIRE DÉTAILLÉE (ENGAGEMENT 3 MOIS)
+SECTION D : GRILLE TARIFAIRE (ENGAGEMENT 3 MOIS)
 ********************************************************************************
 Frais de dossier : 49€ (OFFERTS avec Option Boost).
 
-⭐️ OFFRE DÉCOUVERTE "NEW PASS STARTER" : 99,90€ (5 sessions, 1 mois).
-🚀 OPTION BOOST : +9,90€/mois (Frais offerts, Suspension libre, 1 Invité).
+🔥 L'OFFRE STAR DU SITE : "NEW PASS STARTER"
+- Prix : 99,90€ (Paiement unique).
+- Contenu : 5 sessions au choix (Machine, Sol, Yoga...).
+- Validité : 1 mois. Sans engagement.
 
---- TARIFS MENSUELS ---
+🚀 OPTION BOOST : +9,90€/mois (Frais offerts, Suspension libre, 1 Invité/mois).
 
-🟢 PASS CROSS (Sol Intense - Docks)
-(Cross Training, Cross Core, Cross Body, Cross Rox, Cross Yoga).
+--- ABONNEMENTS MENSUELS ---
+
+🟢 PASS CROSS (Docks - Sol Intense)
+(Cross Training, Cross Core, Body, Rox, Yoga).
 - 2 sessions : 30,30€ | 4 sessions : 60,30€
 - 6 sessions : 90,30€ | 8 sessions : 116,30€
 - 10 sessions : 145,30€ | 12 sessions : 168,30€
 
-🟡 PASS FOCUS (Technique & Arts - Mixte)
+🟡 PASS FOCUS (Mixte - Technique)
 (Boxe, Danse, Yoga, Pilates Tapis).
 - 2 sessions : 36,30€ | 4 sessions : 72,30€
 - 6 sessions : 105,30€ | 8 sessions : 136,30€
 - 10 sessions : 165,30€ | 12 sessions : 192,30€
 
-🟤 PASS REFORMER (Machine Zen - Lavandières)
+🟤 PASS REFORMER (Lavandières - Machine Zen)
 (Pilates Reformer).
 - 2 sessions : 70,30€ | 4 sessions : 136,30€
 - 6 sessions : 198,30€ | 8 sessions : 256,30€
 - 10 sessions : 310,30€ | 12 sessions : 360,30€
 
-🟠 PASS CROSSFORMER (Machine Cardio - Lavandières)
+🟠 PASS CROSSFORMER (Lavandières - Machine Cardio)
 (Pilates Crossformer).
 - 2 sessions : 78,30€ | 4 sessions : 152,30€
 - 6 sessions : 222,30€ | 8 sessions : 288,30€
@@ -182,15 +201,15 @@ Frais de dossier : 49€ (OFFERTS avec Option Boost).
 - 2 sessions : 35,30€ | 4 sessions : 65,30€
 
 ********************************************************************************
-SECTION E : RÉPONSES AUX CAS PARTICULIERS
+SECTION E : FAQ & SCÉNARIOS
 ********************************************************************************
-- ENCEINTE : Conseiller Reformer (avec avis médical) ou Yoga Doux. Déconseiller Boxe/Cross.
-- DÉBUTANT : Rassurer sur le "Small Group" (Le coach adapte tout).
-- REPORT : Pas de report de séances sur le mois suivant (Use it or lose it).
+- "C'EST QUOI LE CROSSFORMER ?" : "C'est du Pilates sur machine, mais en version cardio et intense. On transpire !"
+- "JE SUIS DÉBUTANT" : "Nos cours sont en 'Small Group' (petit comité). Le coach s'adapte à vous."
+- "REPORT DE SÉANCE ?" : "Non, les séances ne se reportent pas d'un mois à l'autre."
 """
 
 # ==============================================================================
-# 4. LE CERVEAU DE SARAH
+# 4. LE CERVEAU DE SARAH (LOGIQUE)
 # ==============================================================================
 
 api_key = None
@@ -200,22 +219,22 @@ try:
 except:
     pass
 
-# Message d'accueil (Neutre et Pro)
+# Message d'accueil aligné avec le site
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "assistant", "content": "Bonjour, je suis Sarah, l'assistante virtuelle SVB. Je peux vous renseigner sur les tarifs, les plannings et le fonctionnement du studio. Quelle est votre question ?"}
+        {"role": "assistant", "content": "Bonjour ! Bienvenue chez SVB 🧡. Je suis Sarah. Je peux vous guider sur nos offres (Starter, Abonnements), nos plannings ou nos services. Par quoi commençons-nous ?"}
     ]
 
-# Affichage Titre
+# TITRE
 st.markdown("<h1>Sarah</h1>", unsafe_allow_html=True)
-st.markdown("<div class='subtitle'>VOTRE ASSISTANTE SVB</div>", unsafe_allow_html=True)
+st.markdown("<div class='subtitle'>VOTRE ASSISTANTE SVB 24/7</div>", unsafe_allow_html=True)
 
-# Affichage Historique
+# HISTORIQUE
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Zone de saisie
+# ZONE DE SAISIE
 if prompt := st.chat_input("Votre question..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
@@ -226,37 +245,36 @@ if prompt := st.chat_input("Votre question..."):
             genai.configure(api_key=api_key)
             model = genai.GenerativeModel('gemini-2.5-flash')
             
-            # Mémoire
+            # Contexte
             history_context = ""
             for msg in st.session_state.messages[-15:]: 
                 role_label = "CLIENT" if msg["role"] == "user" else "SARAH"
                 history_context += f"{role_label}: {msg['content']}\n"
 
-            # Instructions Système (Cerveau)
+            # Instructions Système
             system_prompt = f"""
-            Tu es Sarah, l'assistante experte du studio SVB.
+            Tu es Sarah, l'assistante du studio SVB.
             
-            TA BIBLE (NE RIEN INVENTER) : 
+            TA BIBLE (DONNÉES SITE WEB) : 
             {INFO_STUDIO}
             
             HISTORIQUE :
             {history_context}
             
             CONSIGNES STRICTES :
-            1. **NEUTRE & PRO** : Pas de "Cocon", pas de "Shanaël", pas de "Laura". Tu parles au nom de "L'équipe".
-            2. **CONFORT** : Rappelle que TOUT est fourni (Serviettes, Gel douche...).
-            3. **RÈGLES FINANCIÈRES** : 
-               - UPGRADE = OUI. 
-               - DOWNGRADE = NON (pendant les 3 mois d'engagement).
-            4. **SUSPENSION** : Vérifie l'option BOOST (Sans préavis) vs STANDARD (1 mois préavis).
-            5. **PRIX** : Utilise les montants exacts.
-            6. **HUMAIN** : Si besoin d'escalade -> [HUMAN_ALERT].
+            1. **PRIX UNITAIRE** : Attention à la nuance !
+               - Si on demande le prix public d'une séance machine : 50€.
+               - Si c'est un membre qui veut ajouter une séance : 30€.
+            2. **NEUTRE & PRO** : Tu parles au nom de "L'équipe". Pas de noms propres.
+            3. **CONFORT** : Rappelle que TOUT est fourni (Serviettes, Gel douche...). C'est un point fort du site.
+            4. **SUSPENSION & RÈGLES** : Applique strictement les règles de la Bible.
+            5. **HUMAIN** : Si besoin d'escalade -> [HUMAN_ALERT].
             
             Réponds au CLIENT :
             """
             
             with st.chat_message("assistant"):
-                with st.spinner("Sarah réfléchit..."):
+                with st.spinner("Sarah consulte..."):
                     response = model.generate_content([system_prompt, prompt])
                     text_response = response.text
                     
@@ -270,7 +288,7 @@ if prompt := st.chat_input("Votre question..."):
                     
                     if show_whatsapp_button:
                         st.markdown("---")
-                        st.link_button("📞 Contacter l'accueil (WhatsApp)", "https://wa.me/33744919155")
+                        st.link_button("📞 Contacter l'équipe (WhatsApp)", "https://wa.me/33744919155")
         except:
             st.error("Erreur technique.")
     else:
