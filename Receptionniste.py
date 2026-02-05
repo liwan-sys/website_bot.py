@@ -17,14 +17,13 @@ st.set_page_config(page_title="Sarah - SVB", page_icon="🧡", layout="centered"
 
 st.markdown("""
 <style>
-    /* IMPORT POLICES (Style Manuscrit + Texte Pro) */
+    /* IMPORT POLICES */
     @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Lato:wght@400;700&display=swap');
 
     /* FOND DÉGRADÉ (SAUGE / CRÈME) */
     .stApp {
         background: linear-gradient(180deg, #F9F7F2 0%, #E6F0E6 100%);
         font-family: 'Lato', sans-serif;
-        color: #4A4A4A;
     }
     
     /* MASQUER LES ÉLÉMENTS STREAMLIT */
@@ -49,19 +48,26 @@ st.markdown("""
         letter-spacing: 2px;
     }
 
-    /* BULLES DE CHAT ÉLÉGANTES */
+    /* --- CORRECTION VISIBILITÉ --- */
+    /* BULLES DE CHAT : FORCE LE TEXTE EN NOIR MÊME EN MODE NUIT */
     .stChatMessage {
-        background-color: rgba(255, 255, 255, 0.9);
+        background-color: rgba(255, 255, 255, 0.95) !important;
         border: 1px solid #EBC6A6;
         border-radius: 15px;
         padding: 15px;
         box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        color: #1f1f1f !important; /* IMPORTANT : Texte gris foncé */
+    }
+    
+    /* Force la couleur des paragraphes dans les bulles */
+    .stChatMessage p, .stChatMessage li {
+        color: #1f1f1f !important;
     }
 
     /* BOUTON WHATSAPP */
     .stButton button {
         background: linear-gradient(90deg, #25D366 0%, #128C7E 100%);
-        color: white;
+        color: white !important;
         border: none;
         border-radius: 25px;
         padding: 12px;
