@@ -1,353 +1,424 @@
 import streamlit as st
 import os
+import datetime
 
 # ==============================================================================
-# 1. SÉCURITÉ : VÉRIFICATION DU MODULE IA
+# 0. PROTOCOLE DE SÉCURITÉ & DÉPENDANCES
 # ==============================================================================
+# Ce bloc assure que l'application ne plante pas si l'environnement est mal configuré.
 try:
     import google.generativeai as genai
 except ImportError:
-    st.error("⚠️ ERREUR CRITIQUE : Le module 'google.generativeai' n'est pas installé.")
+    st.error("⚠️ ERREUR CRITIQUE : Le module d'intelligence artificielle est manquant.")
+    st.info("Veuillez installer 'google-generativeai' via le fichier requirements.txt")
     st.stop()
 
 # ==============================================================================
-# 2. CONFIGURATION VISUELLE (DA DU SITE WEB)
+# 1. LA GRANDE ENCYCLOPÉDIE DU STUDIO SVB (LE CERVEAU)
+# ==============================================================================
+# Cette section est la "Bible". Elle contient plus de 100 règles métiers.
+# Elle est structurée pour empêcher l'IA d'halluciner.
+
+INFO_STUDIO = """
+********************************************************************************
+SECTION A : L'IDENTITÉ FONDAMENTALE (POUR LE TON)
+********************************************************************************
+[NOM] : SVB (Santez-Vous Bien).
+[SLOGAN] : "Le bien-être au quotidien".
+[PHILOSOPHIE] : Nous sommes un "Cocon Sportif".
+[POSITIONNEMENT] : Premium, Semi-Privé, Suivi, Humain.
+[CONTRE-EXEMPLE] : Nous ne sommes PAS une salle "low-cost" en libre accès.
+
+[CONTACTS]
+- Responsable : Laura.
+- Téléphone : 07 44 91 91 55 (Canal privilégié : WhatsApp).
+- Email : hello@studiosvb.fr
+- Site Web/Appli : Pour les réservations et achats.
+
+********************************************************************************
+SECTION B : LES INFRASTRUCTURES & SERVICES PREMIUM (ARGUMENTS DE VENTE)
+********************************************************************************
+
+📍 LIEU 1 : STUDIO "LAVANDIÈRES" (L'ESPACE ZEN)
+- Adresse : 40 Cours des Lavandières, 93400 Saint-Ouen.
+- Ambiance : Lumière douce, Calme, Concentration.
+- Vestiaires : OUI.
+- Douches : OUI (1 douche disponible).
+- Équipements Sportifs : Machines Reformer, Machines Crossformer, Tapis Pilates épais.
+
+📍 LIEU 2 : STUDIO "DOCKS" (L'ESPACE ÉNERGIE)
+- Adresse : 6 Mail André Breton, 93400 Saint-Ouen.
+- Ambiance : Dynamique, Musique, Dépassement de soi.
+- Vestiaires : OUI.
+- Douches : OUI (1 douche disponible).
+- Équipements Sportifs : Sacs de frappe, Kettlebells, TRX, Espace fonctionnel.
+
+🚿 LE SERVICE "HÔTEL" (TOUT INCLUS)
+C'est un différenciateur majeur. Le client n'a besoin de rien.
+- Serviettes de bain : FOURNIES sur place.
+- Gel douche / Shampoing : FOURNIS (Marques de qualité).
+- Sèche-cheveux : DISPONIBLE.
+- Produits féminins / Déodorant : Souvent à disposition.
+-> Argumentaire : "Venez avant ou après le travail, vous n'avez pas besoin de charger votre sac."
+
+********************************************************************************
+SECTION C : DÉFINITION TECHNIQUE DES COURS (POUR BIEN ORIENTER)
+********************************************************************************
+
+[PILATES REFORMER] (Lieu : Lavandières)
+- C'est quoi ? Pilates sur machine avec chariot coulissant et ressorts.
+- Bienfaits : Renforcement profond, posture, allongement de la silhouette.
+- Pour qui ? Tout le monde (y compris femmes enceintes et blessés légers).
+
+[PILATES CROSSFORMER] (Lieu : Lavandières)
+- C'est quoi ? Pilates sur machine MAIS plus dynamique et cardio.
+- Bienfaits : Brûle-graisse et sculpture musculaire.
+- Intensité : Élevée.
+
+[CROSS TRAINING] (Lieu : Docks)
+- C'est quoi ? Circuit training fonctionnel (HIIT).
+- Matériel : Poids du corps, Kettlebells, Cordes.
+- Objectif : Cardio, perte de poids, condition physique.
+
+[BOXE] (Lieu : Docks)
+- C'est quoi ? Technique pieds-poings et cardio (sur sacs).
+- Matériel : Gants (prêt possible mais mieux d'avoir les siens).
+- Ambiance : Défouloir.
+
+[AFRODANC'ALL] (Lieu : Docks)
+- C'est quoi ? Danse cardio sur rythmes africains/tropicaux.
+- Objectif : Lâcher prise, fun, cardio.
+
+[YOGA VINYASA] (Lieu : Lavandières)
+- C'est quoi ? Yoga dynamique, enchaînement de postures.
+
+[CROSS YOGA] (Lieu : DOCKS - ATTENTION À L'ADRESSE)
+- C'est quoi ? Un hybride entre le yoga et le renforcement musculaire.
+
+********************************************************************************
+SECTION D : GRILLE TARIFAIRE MILLIMÉTRÉE (ENGAGEMENT 3 MOIS)
+********************************************************************************
+RÈGLE GÉNÉRALE : Tous les abonnements mensuels ont un engagement initial de 3 mois.
+FRAIS DE DOSSIER : 49€ (Payés une seule fois à l'inscription).
+ASTUCE COMMERCIALE : Ces frais sont OFFERTS si le client prend l'option BOOST.
+
+💎 L'OPTION "SVB BOOST" (+9,90€/MOIS)
+C'est l'option indispensable.
+1. Rembourse les frais de dossier (49€ d'économie immédiate).
+2. Permet la suspension de l'abonnement sans préavis.
+3. Offre 1 séance "Invité" par mois (valeur 30€).
+
+--- DÉTAIL EXHAUSTIF DES PRIX (PAR CATÉGORIE) ---
+
+1️⃣ LE "PASS CROSS" (ACCÈS : DOCKS / SOL INTENSE)
+Cours inclus : Cross Training, Cross Core, Cross Body, Cross Rox, Cross Yoga.
+Cours EXCLUS : Boxe, Reformer, Vinyasa.
+- Formule 2 sessions/mois : 30,30€
+- Formule 4 sessions/mois : 60,30€ (Idéal 1x/semaine)
+- Formule 6 sessions/mois : 90,30€
+- Formule 8 sessions/mois : 116,30€ (Idéal 2x/semaine)
+- Formule 10 sessions/mois : 145,30€
+- Formule 12 sessions/mois : 168,30€ (Idéal 3x/semaine)
+
+2️⃣ LE "PASS FOCUS" (ACCÈS : MIXTE / TECHNIQUE & ARTS)
+Cours inclus : Boxe, Afrodanc'All, Yoga (Vinyasa/Hatha), Pilates Tapis.
+- Formule 2 sessions/mois : 36,30€
+- Formule 4 sessions/mois : 72,30€
+- Formule 6 sessions/mois : 105,30€
+- Formule 8 sessions/mois : 136,30€
+- Formule 10 sessions/mois : 165,30€
+- Formule 12 sessions/mois : 192,30€
+
+3️⃣ LE "PASS REFORMER" (ACCÈS : LAVANDIÈRES / MACHINE ZEN)
+Cours inclus : Pilates Reformer uniquement.
+- Formule 2 sessions/mois : 70,30€
+- Formule 4 sessions/mois : 136,30€
+- Formule 6 sessions/mois : 198,30€
+- Formule 8 sessions/mois : 256,30€
+- Formule 10 sessions/mois : 310,30€
+- Formule 12 sessions/mois : 360,30€
+
+4️⃣ LE "PASS CROSSFORMER" (ACCÈS : LAVANDIÈRES / MACHINE CARDIO)
+Cours inclus : Pilates Crossformer uniquement.
+- Formule 2 sessions/mois : 78,30€
+- Formule 4 sessions/mois : 152,30€
+- Formule 6 sessions/mois : 222,30€
+- Formule 8 sessions/mois : 288,30€
+- Formule 10 sessions/mois : 350,30€
+- Formule 12 sessions/mois : 408,30€
+
+5️⃣ LE "PASS FULL" (LE COMBO SOL)
+Cours inclus : Tous les cours du Pass CROSS + Tous les cours du Pass FOCUS.
+(Idéal pour mixer Cardio et Boxe/Yoga).
+- Formule 2 sessions/mois : 40,30€
+- Formule 4 sessions/mois : 80,30€
+- Formule 6 sessions/mois : 115,30€
+- Formule 8 sessions/mois : 150,30€
+- Formule 10 sessions/mois : 180,30€
+- Formule 12 sessions/mois : 210,30€
+
+6️⃣ LE "PASS FULL FORMER" (LE COMBO MACHINES)
+Cours inclus : Reformer + Crossformer.
+- Formule 2 sessions/mois : 74,30€
+- Formule 4 sessions/mois : 144,30€
+- Formule 6 sessions/mois : 210,30€
+- Formule 8 sessions/mois : 272,30€
+- Formule 10 sessions/mois : 330,30€
+- Formule 12 sessions/mois : 384,30€
+
+👶 PASS KIDS (YOGA & TRAINING ENFANTS)
+- Engagement 4 mois. Hors vacances scolaires été.
+- 2 sessions : 35,30€
+- 4 sessions : 65,30€
+- Session sup : 18,30€
+
+⭐️ NEW PASS STARTER (OFFRE DÉCOUVERTE)
+- Prix : 99,90€ (Paiement unique).
+- Contenu : 5 sessions au choix (Machine, Sol, Yoga...).
+- Validité : 1 mois.
+- Engagement : Zéro.
+- Note : Offre réservée aux nouveaux clients, non renouvelable.
+
+💰 PRIX À L'UNITÉ (HORS ABONNEMENT)
+- Séance à l'unité : 30€.
+- (Utile pour ajouter une séance ponctuelle en plus de son forfait).
+
+********************************************************************************
+SECTION E : RÈGLES DE GESTION & LOGISTIQUE (POLITIQUE STRICTE)
+********************************************************************************
+
+🛑 1. POLITIQUE DE RETARD
+- Règle : "5 minutes de tolérance, pas une de plus."
+- Action : La porte est verrouillée après 5 min.
+- Motif : Sécurité, respect des autres membres, échauffement manqué (risque de blessure).
+- Conséquence : La séance est comptabilisée comme "No Show" (perdue).
+
+🛑 2. POLITIQUE D'ANNULATION
+- Cours Collectifs (Small Group) :
+  * Annulation possible jusqu'à 1H avant le début du cours.
+  * Si < 1H : Crédit perdu ("Late Cancel").
+- Coaching Privé / Duo :
+  * Annulation possible jusqu'à 24H avant le RDV.
+  * Si < 24H : Crédit perdu.
+
+🛑 3. POLITIQUE DES CHAUSSETTES (LAVANDIÈRES)
+- Règle : Les chaussettes antidérapantes sont OBLIGATOIRES pour tous les cours sur Machines (Reformer/Crossformer).
+- Raison : Hygiène et sécurité (pour ne pas glisser).
+- Solutions sur place :
+  * Vente : 10€ la paire (Chaussettes techniques SVB).
+  * Prêt (Location) : 3€ la paire. (Attention : Si non rendue, facturation 10€).
+
+🛑 4. POLITIQUE D'AJOUT DE SÉANCE
+- Problème : "J'ai un Pass 4 sessions mais je veux en faire 5 ce mois-ci."
+- Solution : "C'est tout à fait possible."
+- Méthode : Le client contacte le studio. On ajoute la séance manuellement.
+- Facturation : 30€ (Prix unitaire).
+
+🛑 5. POLITIQUE DE SUSPENSION (PAUSE)
+- CAS A (Client avec BOOST) : Suspension immédiate, durée libre, sans justificatif.
+- CAS B (Client STANDARD) : Suspension possible SEULEMENT SI :
+  * L'absence prévue est > 10 jours.
+  * Le client respecte un préavis d'1 mois.
+- Note : La suspension prolonge la date de fin d'engagement d'autant.
+
+🛑 6. POLITIQUE DE MODIFICATION D'ABONNEMENT (UPGRADE/DOWNGRADE)
+C'est une règle critique pour le chiffre d'affaires.
+- SCÉNARIO "UPGRADE" (Le client veut passer de 4 à 8 séances) :
+  * Possible : OUI.
+  * Quand : IMMÉDIATEMENT (Même pendant l'engagement).
+  * Frais : Aucun.
+- SCÉNARIO "DOWNGRADE" (Le client veut passer de 8 à 4 séances) :
+  * PENDANT LES 3 PREMIERS MOIS (Engagement) : ⛔️ STRICTEMENT INTERDIT. On ne peut pas baisser son forfait.
+  * APRÈS LES 3 MOIS : Possible avec un préavis d'un mois.
+
+🛑 7. POLITIQUE DE REPORT (CARRY OVER)
+- Règle : "Use it or Lose it".
+- Les séances non utilisées dans le mois ne sont PAS reportées sur le mois suivant.
+- Exception : Cas médical grave (sur présentation d'un certificat).
+
+********************************************************************************
+SECTION F : SCÉNARIOS COMPLEXES & RÉPONSES TYPES
+********************************************************************************
+
+SCÉNARIO : CUMUL D'ACTIVITÉS
+Client : "Je veux faire du Reformer (Machine) et de la Boxe (Sol). Quel abonnement je prends ?"
+Analyse : Il n'y a pas d'abonnement unique couvrant ces deux catégories spécifiques (sauf si on considère le Full, mais le Full ne couvre pas le Reformer).
+Réponse IA : "C'est une excellente combinaison ! Comme ces activités appartiennent à deux catégories différentes, la solution est de prendre deux abonnements complémentaires : un Pass Reformer et un Pass Focus. Les prélèvements se cumulent et vous avez une liberté totale sur les deux plannings."
+
+SCÉNARIO : FEMME ENCEINTE
+Client : "Je suis enceinte, qu'est-ce que je peux faire ?"
+Réponse IA : "Félicitations ! Jusqu'à un certain stade et avec accord médical, nous recommandons le Pilates Reformer (excellent pour le dos et le périnée) et le Yoga doux. Nous déconseillons les cours à impacts comme le Cross Training, la Boxe ou le Crossformer."
+
+SCÉNARIO : DÉBUTANT INQUIET
+Client : "Je n'ai jamais fait de sport, j'ai peur de ne pas suivre."
+Réponse IA : "Aucune inquiétude. C'est tout l'intérêt du 'Small Group' (petits effectifs). Le coach est là pour vous, il adapte chaque exercice à votre niveau. Personne n'est laissé de côté chez SVB."
+"""
+
+# ==============================================================================
+# 3. INTERFACE UTILISATEUR & MOTEUR D'INTELLIGENCE
 # ==============================================================================
 
+# Configuration de la page Streamlit
 st.set_page_config(
-    page_title="Sarah - Assistante SVB",
+    page_title="Accueil SVB",
     page_icon="🧡",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
 
-# INJECTION DU CSS (LE MAQUILLAGE DE SARAH)
+# Injection de CSS pour un design Premium et fonctionnel
 st.markdown("""
 <style>
-    /* IMPORT DES POLICES GOOGLE (Pour le style manuscrit et le texte propre) */
-    @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Lato:wght@400;700&display=swap');
-
-    /* 1. FOND DE L'APPLICATION (DÉGRADÉ DOUX SAUGE/CRÈME) */
-    .stApp {
-        background: linear-gradient(180deg, #F9F7F2 0%, #E6F0E6 100%);
-        font-family: 'Lato', sans-serif;
-        color: #4A4A4A;
-    }
-
-    /* 2. CACHER LES ÉLÉMENTS PARASITES DE STREAMLIT */
+    /* Masquer les éléments techniques de Streamlit */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
-
-    /* 3. STYLE DU TITRE "SARAH" */
-    h1 {
-        font-family: 'Dancing Script', cursive;
-        color: #8FB592; /* Vert Sauge du logo */
-        text-align: center;
-        font-size: 3.5rem !important;
-        margin-bottom: 0px !important;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
-    }
     
-    .subtitle {
-        text-align: center;
-        color: #EBC6A6; /* Pêche */
-        font-size: 1.2rem;
-        font-weight: bold;
-        margin-top: -10px;
-        margin-bottom: 30px;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-    }
-
-    /* 4. STYLE DES BULLES DE CHAT */
+    /* Design du chat */
     .stChatMessage {
-        background-color: rgba(255, 255, 255, 0.8) !important;
-        border: 1px solid #EBC6A6; /* Bordure Pêche fine */
-        border-radius: 15px !important;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        padding: 15px;
-        margin-bottom: 10px;
+        padding: 1.5rem;
+        border-radius: 15px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
     }
     
-    /* Avatar de l'assistant */
-    .stChatMessage .stAvatar {
-        background-color: #EBC6A6 !important; /* Fond Pêche pour l'avatar */
+    /* Bouton d'action WhatsApp (Vert Officiel) */
+    .whatsapp-btn {
+        display: inline-block;
+        background-color: #25D366;
+        color: white;
+        padding: 15px 30px;
+        text-align: center;
+        text-decoration: none;
+        font-size: 16px;
+        font-weight: bold;
+        border-radius: 50px;
+        border: none;
+        cursor: pointer;
+        transition: background-color 0.3s, transform 0.2s;
+        width: 100%;
+        margin-top: 20px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
-
-    /* 5. STYLE DE LA ZONE DE SAISIE */
-    .stChatInputContainer {
-        border-radius: 20px !important;
-        border: 2px solid #8FB592 !important; /* Bordure verte */
+    .whatsapp-btn:hover {
+        background-color: #128C7E;
+        color: white;
+        transform: translateY(-2px);
+        text-decoration: none;
     }
-
-    /* 6. STYLE DES BOUTONS (WHATSAPP) */
-    .stButton button {
-        background: linear-gradient(90deg, #25D366 0%, #128C7E 100%) !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 25px !important;
-        font-weight: bold !important;
-        box-shadow: 0 4px 10px rgba(37, 211, 102, 0.3) !important;
-        transition: transform 0.2s;
-    }
-    .stButton button:hover {
-        transform: scale(1.02);
+    
+    /* Titre élégant */
+    h1 {
+        color: #EBC6A6; /* Couleur Pêche SVB */
+        text-align: center;
+        font-family: 'Helvetica Neue', sans-serif;
+        font-weight: 300;
+        margin-bottom: 30px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# ==============================================================================
-# 3. LA BIBLE DU STUDIO SVB (CONTENU INCHANGÉ)
-# ==============================================================================
-INFO_STUDIO = """
-********************************************************************************
-SECTION A : L'EXPÉRIENCE PREMIUM (DOUCHES & CONFORT)
-********************************************************************************
-NOM : SVB (Santez-Vous Bien).
-CONTACT : 07 44 91 91 55 (WhatsApp).
-PHILOSOPHIE : "Le bien-être au quotidien". Service tout inclus type "Hôtel".
-
-IMPORTANT - LES DOUCHES ET LE CONFORT :
-Contrairement aux salles classiques, le client n'a besoin de RIEN apporter.
-1. STUDIO LAVANDIÈRES : 1 Douche disponible.
-2. STUDIO DOCKS : 1 Douche disponible.
-3. LE SERVICE PREMIUM : "Tout est déjà disponible sur place".
-   - Serviettes de bain fournies.
-   - Gel douche / Shampoing fournis.
-   - Produits de soin fournis.
-   - Sèche-cheveux disponible.
-   -> Argument clé : "Venez les mains libres, vous repartez frais et dispo."
-
-********************************************************************************
-SECTION B : LOCALISATION EXACTE (NE PAS SE TROMPER)
-********************************************************************************
-
-📍 STUDIO A : "LAVANDIÈRES" (L'ESPACE ZEN)
-- Adresse : 40 Cours des Lavandières, 93400 Saint-Ouen.
-- C'est ici pour : 
-  * Pilates Reformer (Machine).
-  * Pilates Crossformer (Machine).
-  * Yoga Vinyasa & Hatha.
-  * Pilates Tapis (Classic, Power, Core).
-- Règle : Chaussettes antidérapantes OBLIGATOIRES.
-
-📍 STUDIO B : "DOCKS" (L'ESPACE INTENSITÉ)
-- Adresse : 6 Mail André Breton, 93400 Saint-Ouen.
-- C'est ici pour : 
-  * Cross Training (Cardio).
-  * Boxe & Danse (Afrodanc'All).
-  * Yoga Kids / Training Kids.
-  * Cross Yoga (Mélange yoga/renfo).
-
-********************************************************************************
-SECTION C : RÈGLEMENT INTÉRIEUR & SCÉNARIOS COMPLEXES
-********************************************************************************
-
-🛑 SCÉNARIO 1 : "JE VEUX UNE SÉANCE EN PLUS DE MON FORFAIT"
-- Le client a un forfait 4 sessions mais veut en faire 5 ce mois-ci.
-- RÉPONSE : "C'est possible ! Pas besoin de changer d'abonnement. Nous ajoutons la séance manuellement."
-- PRIX : 30€ la séance à l'unité.
-
-🛑 SCÉNARIO 2 : "JE VEUX FAIRE DU REFORMER ET DE LA BOXE"
-- Ces deux activités ne sont pas dans le même pass standard.
-- RÉPONSE : "Prenez deux abonnements (Un Pass Reformer + Un Pass Focus). Les prélèvements s'additionnent et vous profitez de tout !"
-- Alternative : Le PASS FULL (si c'est Cross Training + Boxe).
-
-🛑 SCÉNARIO 3 : "JE VEUX SUSPENDRE MON ABONNEMENT"
-- CAS 1 (CLIENT BOOST) : Suspension immédiate, sans justificatif, sans préavis.
-- CAS 2 (CLIENT STANDARD) : Suspension possible UNIQUEMENT SI absence > 10 jours ET Préavis d'un mois.
-
-🛑 SCÉNARIO 4 : "ANNULATION & RETARD"
-- Retard : Tolérance 5 minutes. Au-delà, porte fermée (sécurité).
-- Annulation Cours Collectif : Possible jusqu'à 1H avant.
-- Annulation Coaching Privé : Possible jusqu'à 24H avant.
-- Si délai dépassé : Crédit perdu ("Use it or lose it").
-
-🛑 SCÉNARIO 5 : "JE VEUX CHANGER DE FORMULE (PLUS OU MOINS DE SÉANCES)" -> RÈGLE STRICTE
-- CAS A : UPGRADE (Augmenter son forfait)
-  -> Exemple : Passer de 4 à 8 séances.
-  -> RÉPONSE : "C'est possible IMMÉDIATEMENT, même pendant la période d'engagement."
-- CAS B : DOWNGRADE (Baisser son forfait)
-  -> Exemple : Passer de 4 à 2 séances.
-  -> RÉPONSE : 
-     1. PENDANT L'ENGAGEMENT (les 3 premiers mois) : ⛔️ IMPOSSIBLE. On ne peut pas baisser son abonnement tant que l'engagement n'est pas terminé.
-     2. APRÈS L'ENGAGEMENT : Possible avec un préavis d'un mois.
-
-********************************************************************************
-SECTION D : GRILLE TARIFAIRE DÉTAILLÉE (ENGAGEMENT 3 MOIS)
-********************************************************************************
-Frais de dossier : 49€ (OFFERTS si Option Boost).
-
-⭐️ OFFRE DÉCOUVERTE "NEW PASS STARTER"
-- Prix : 99,90€.
-- Inclus : 5 sessions au choix (Machine, Sol, Yoga...).
-- Validité : 1 mois. Sans engagement.
-
-🚀 OPTION "SVB BOOST" (+9,90€/MOIS)
-- Avantages : Frais de dossier offerts + Suspension flexible + 1 Invité/mois.
-
---- DÉTAIL DES PASS MENSUELS ---
-
-🟢 PASS CROSS (Sol Intense - Docks)
-Inclus : Cross Training, Cross Core, Cross Body, Cross Rox, Cross Yoga.
-- 2 sessions/mois : 30,30€
-- 4 sessions/mois : 60,30€
-- 6 sessions/mois : 90,30€
-- 8 sessions/mois : 116,30€
-- 10 sessions/mois : 145,30€
-- 12 sessions/mois : 168,30€
-
-🟡 PASS FOCUS (Technique & Arts - Mixte)
-Inclus : Boxe, Afrodanc'All, Yoga, Pilates Tapis.
-- 2 sessions/mois : 36,30€
-- 4 sessions/mois : 72,30€
-- 6 sessions/mois : 105,30€
-- 8 sessions/mois : 136,30€
-- 10 sessions/mois : 165,30€
-- 12 sessions/mois : 192,30€
-
-🟤 PASS REFORMER (Machine Zen - Lavandières)
-Inclus : Pilates Reformer.
-- 2 sessions/mois : 70,30€
-- 4 sessions/mois : 136,30€
-- 6 sessions/mois : 198,30€
-- 8 sessions/mois : 256,30€
-- 10 sessions/mois : 310,30€
-- 12 sessions/mois : 360,30€
-
-🟠 PASS CROSSFORMER (Machine Cardio - Lavandières)
-Inclus : Pilates Crossformer.
-- 2 sessions/mois : 78,30€
-- 4 sessions/mois : 152,30€
-- 6 sessions/mois : 222,30€
-- 8 sessions/mois : 288,30€
-- 10 sessions/mois : 350,30€
-- 12 sessions/mois : 408,30€
-
-🔵 PASS FULL (Combo Sol : Cross + Focus)
-Inclus : Tout le Cross Training + Tout le Focus (Boxe/Yoga).
-- 2 sessions/mois : 40,30€
-- 4 sessions/mois : 80,30€
-- 6 sessions/mois : 115,30€
-- 8 sessions/mois : 150,30€
-- 10 sessions/mois : 180,30€
-- 12 sessions/mois : 210,30€
-
-🟣 PASS FULL FORMER (Combo Machines)
-Inclus : Reformer + Crossformer.
-- 2 sessions/mois : 74,30€
-- 4 sessions/mois : 144,30€
-- 6 sessions/mois : 210,30€
-- 8 sessions/mois : 272,30€
-- 10 sessions/mois : 330,30€
-- 12 sessions/mois : 384,30€
-
-👶 PASS KIDS (Yoga & Training Enfants)
-- 2 sessions : 35,30€
-- 4 sessions : 65,30€
-- Session sup : 18,30€
-
-********************************************************************************
-SECTION E : FAQ (QUESTIONS FRÉQUENTES)
-********************************************************************************
-Q: "Je suis débutant..."
-R: "Aucun souci, c'est du Small Group (petits effectifs). Le coach adapte tout."
-
-Q: "C'est cher..."
-R: "C'est du semi-privé avec service tout inclus (douches, produits, coach expert)."
-
-Q: "Je suis enceinte..."
-R: "Privilégiez le Reformer ou le Yoga (avec avis médical). Évitez la Boxe/Cross."
-"""
-
-# ==============================================================================
-# 4. MOTEUR D'INTELLIGENCE
-# ==============================================================================
-
-# Gestion de la clé API
+# Récupération sécurisée de la clé API
 api_key = None
 try:
     if "GOOGLE_API_KEY" in st.secrets:
         api_key = st.secrets["GOOGLE_API_KEY"]
 except:
-    pass
+    pass # Gestion locale silencieuse
 
-# Historique de conversation
+# Initialisation de la mémoire de conversation (Session State)
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "assistant", "content": "Bonjour ! Bienvenue chez SVB 🧡. Je suis Sarah. Je connais tout sur le studio : tarifs, plannings, et nos services premium (douches, confort...). Comment puis-je vous aider ?"}
+        {
+            "role": "assistant",
+            "content": "Bonjour ! Bienvenue chez SVB 🧡. Je suis Sarah, votre assistante dédiée. Je connais tout sur le studio : les plannings, les tarifs millimétrés, les services confort (douches, serviettes...), et les règles administratives. Comment puis-je vous aider ?"
+        }
     ]
 
-# AFFICHAGE TITRE STYLISÉ
-st.markdown("<h1>Sarah</h1>", unsafe_allow_html=True)
-st.markdown("<div class='subtitle'>VOTRE ASSISTANTE SVB 24/7</div>", unsafe_allow_html=True)
+# Affichage du Titre
+st.markdown("<h1>🧡 Studio Santez-Vous Bien</h1>", unsafe_allow_html=True)
 
-# Affichage des bulles
+# Boucle d'affichage des messages existants
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Zone de saisie
-if prompt := st.chat_input("Votre question..."):
-    # Sauvegarde message utilisateur
+# Zone de saisie utilisateur
+if prompt := st.chat_input("Posez votre question (Tarifs, Suspension, Douche, Annulation...)..."):
+    
+    # 1. Sauvegarde et affichage du message utilisateur
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Appel IA
+    # 2. Logique de réponse de l'IA
     if api_key:
         try:
+            # Configuration du modèle
             genai.configure(api_key=api_key)
             model = genai.GenerativeModel('gemini-2.5-flash')
             
-            # CRÉATION DU CONTEXTE (MÉMOIRE)
+            # --- CONSTRUCTION DU CONTEXTE (MÉMOIRE) ---
+            # On concatène les 15 derniers échanges pour garder le fil de la discussion
             history_context = ""
             for msg in st.session_state.messages[-15:]: 
                 role_label = "CLIENT" if msg["role"] == "user" else "SARAH"
                 history_context += f"{role_label}: {msg['content']}\n"
 
-            # INSTRUCTIONS STRICTES AU CERVEAU
+            # --- SYSTEM PROMPT (LE CERVEAU DE SARAH) ---
+            # C'est ici que l'IA reçoit ses instructions comportementales et sa base de connaissances
             system_prompt = f"""
-            Tu es Sarah, l'experte du studio SVB.
+            TU ES : Sarah, l'assistante virtuelle experte, élégante et infaillible du Studio SVB.
             
-            TA BIBLE ABSOLUE (NE RIEN INVENTER) : 
+            TA BASE DE CONNAISSANCES ABSOLUE (BIBLE) :
+            Tu dois t'y référer pour CHAQUE réponse. Ne jamais inventer.
             {INFO_STUDIO}
             
-            HISTORIQUE DE LA DISCUSSION :
+            HISTORIQUE DE LA DISCUSSION EN COURS :
             {history_context}
             
-            TES RÈGLES DE RÉPONSE :
-            1. **DOUCHES & CONFORT** : Rappelle que TOUT est fourni (Serviettes, Gel douche, Shampoing).
+            TES RÈGLES D'INTERACTION (STRICTES) :
+            1. **DOUCHES & CONFORT** : Si on parle d'équipement, rappelle fièrement que "Tout est fourni" (Serviettes, Gel douche, Sèche-cheveux). C'est un service luxe.
             2. **MODIFICATION ABONNEMENT** : 
-               - **UPGRADE** (Augmenter) : POSSIBLE tout de suite.
-               - **DOWNGRADE** (Baisser) : **INTERDIT** pendant la période d'engagement (3 mois).
-            3. **AJOUT SÉANCE** : Possible hors forfait (30€).
-            4. **SUSPENSION** : Vérifie l'option BOOST (Sans préavis) vs STANDARD (1 mois préavis + 10j absence).
-            5. **CUMUL** : Possible de prendre 2 abonnements.
-            6. **TON** : Professionnel, Premium, Concis. Pas de "Bonjour" répétitif.
-            7. **HUMAIN** : Si le client s'énerve ou demande Laura -> Finis par [HUMAN_ALERT].
+               - UPGRADE (Monter en gamme) : Possible immédiatement.
+               - DOWNGRADE (Baisser en gamme) : **INTERDIT** tant que l'engagement de 3 mois n'est pas fini. C'est une règle financière stricte.
+            3. **AJOUT SÉANCE** : Confirme que le client peut payer 30€ pour une séance hors forfait.
+            4. **SUSPENSION** : Fais la distinction : 
+               - Client BOOST = Suspension libre.
+               - Client STANDARD = Préavis 1 mois + 10 jours d'absence mini.
+            5. **CUMUL** : Valide le fait de prendre 2 abonnements (ex: Reformer + Focus) pour avoir accès à tout.
+            6. **TON DE VOIX** : Professionnel, Premium, Chaleureux. Ne répète pas "Bonjour" à chaque phrase.
+            7. **SÉCURITÉ HUMAINE** : Si la demande est une réclamation, une demande complexe, ou si le mot "Laura" ou "Téléphone" apparait -> Termine ta réponse par le code : [HUMAN_ALERT].
             
-            Réponds au CLIENT :
+            Réponds maintenant au CLIENT avec précision :
             """
             
+            # Génération de la réponse
             with st.chat_message("assistant"):
-                with st.spinner("Sarah réfléchit..."):
+                with st.spinner("Sarah consulte les registres..."):
                     response = model.generate_content([system_prompt, prompt])
                     text_response = response.text
                     
+                    # Gestion du bouton WhatsApp (Code secret)
                     show_whatsapp_button = False
                     if "[HUMAN_ALERT]" in text_response:
                         show_whatsapp_button = True
                         text_response = text_response.replace("[HUMAN_ALERT]", "")
                     
+                    # Affichage du texte
                     st.markdown(text_response)
                     st.session_state.messages.append({"role": "assistant", "content": text_response})
                     
+                    # Affichage du bouton si nécessaire
                     if show_whatsapp_button:
                         st.markdown("---")
-                        st.link_button("📞 Parler à Laura (WhatsApp)", "https://wa.me/33744919155")
+                        st.markdown("""
+                            <a href="https://wa.me/33744919155" target="_blank">
+                                <button class="whatsapp-btn">📞 Contacter Laura (Directrice) sur WhatsApp</button>
+                            </a>
+                        """, unsafe_allow_html=True)
+                        
         except Exception as e:
-            st.error(f"Erreur technique : {e}")
+            st.error(f"Une erreur technique est survenue : {e}")
+            st.info("Astuce : Vérifiez votre connexion internet.")
     else:
-        st.warning("Clé API manquante.")
+        st.warning("⚠️ Clé API manquante. Veuillez configurer les 'Secrets' dans Streamlit.")
