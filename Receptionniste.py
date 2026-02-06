@@ -1,26 +1,28 @@
 # ==============================================================================
-# SARAH — SVB CHATBOT (Streamlit + Gemini) — VERSION PROPRE "ANTI-ERREURS"
+# SARAH — SVB CHATBOT (Streamlit + Gemini) — VERSION PROPRE "ANTI-ERREURS" + PLANNING (MODE A)
 # ==============================================================================
 #
-# OBJECTIF (VALIDÉ PAR TOI)
-# 1) ZÉRO ERREUR sur tarifs / règles / inscription / prix à l’unité / séance supp.
-#    => Tout ce qui est "chiffré" ou "règle" = DÉTERMINISTE (Python).
-# 2) Gemini = uniquement pour l’orientation, la reformulation, le ton humain,
-#    et les questions de qualification. Jamais de prix inventé.
-# 3) "Humain" : pas de présentation répétée, pas de ton bot, réponses naturelles.
+# ✅ VERSION COMPLÈTE (pas de patch partiel)
+#
+# CE QUE CE CODE GARANTIT
+# 1) Tarifs / règles / inscription / unité / séance supp / planning = DÉTERMINISTE (Python)
+#    => zéro hallucination.
+# 2) Gemini = uniquement orientation / ton / qualification. Et on BLOQUE toute sortie
+#    Gemini contenant un prix (anti-hallucination).
+# 3) Sarah "humaine" : pas de présentation répétée, réponses naturelles.
+#
+# IMPORTANT — PLANNING MODE A
+# - Le planning est dans la variable PLANNING ci-dessous.
+# - ⚠️ Pour l’instant, je l’ai mis en "EXEMPLE" (placeholder).
+#   Tu dois remplacer les exemples par TON planning réel (texte / jours / heures).
+# - Une fois rempli, Sarah répondra avec les horaires exacts.
 #
 # RÈGLES OFFICIELLES (TES RÉPONSES)
-# - Source de vérité: SITE (studiosvb.com) + tes règles internes validées ici.
-# - Ajout / séance supplémentaire quand on est abonné : AU PRORATA DU PASS (prix / nb sessions).
-# - Prix à l’unité (non abonné) : Training = 30€ ; Machine = 50€.
+# - Séance supplémentaire abonné : AU PRORATA DU PASS (prix / nb sessions).
+# - À l’unité (non abonné) : Training = 30€ ; Machine = 50€.
 # - Essai : 30€ remboursé si inscription.
-# - Offre Starter 99,90€ : 5 sessions / 1 mois MAIS 1 séance par discipline (pas 5 fois la même discipline).
-# - Human alert : si le client demande un humain OU si question trop complexe / info incertaine.
-#
-# ==============================================================================
-# IMPORTANT
-# - Tu peux adapter les valeurs/labels/tarifs dans CONFIG_TARIFS si ton site change.
-# - Ne mets jamais une règle "inventée" ici. Si doute => [HUMAN_ALERT]
+# - Starter : 99,90€ (5 sessions / 1 mois) MAIS 1 séance par discipline.
+# - Human alert : si client demande un humain OU si question trop complexe / info incertaine.
 # ==============================================================================
 
 import os
@@ -53,7 +55,7 @@ except ImportError:
 st.set_page_config(page_title="Sarah - SVB", page_icon="🧡", layout="centered")
 
 # ------------------------------------------------------------------------------
-# 3) CSS (ton identité)
+# 3) CSS (identité)
 # ------------------------------------------------------------------------------
 st.markdown(
     """
@@ -133,30 +135,30 @@ WHATSAPP_LABEL = "📞 Contacter l'équipe (WhatsApp)"
 
 # ---- Prix à l’unité (non abonné) — OFFICIEL ----
 UNIT_PRICE = {
-    "training": 30.0,  # Cross / Focus / Full (sol / training)
-    "machine": 50.0,   # Reformer / Crossformer / Full Former (machines)
+    "training": 30.0,
+    "machine": 50.0,
 }
 
 # ---- Essai — OFFICIEL ----
 TRIAL = {
     "price": 30.0,
-    "refunded_if_signup": True,  # remboursé si inscription
+    "refunded_if_signup": True,
 }
 
 # ---- Starter — OFFICIEL ----
 STARTER = {
     "price": 99.90,
     "sessions": 5,
-    "duration_days": 30,  # 1 mois
+    "duration_days": 30,
     "discipline_rule": "1 séance par discipline (pas 5 fois la même discipline).",
 }
 
-# ---- Séance supplémentaire (abonné) — OFFICIEL : prorata du pass ----
+# ---- Séance supplémentaire abonné — OFFICIEL : prorata du pass ----
 EXTRA_SESSION_POLICY = {
-    "mode": "pro_rata_of_member_pass",  # (seule règle active)
+    "mode": "pro_rata_of_member_pass",
 }
 
-# ---- Infos studios (neutres, sans inventer de règles) ----
+# ---- Studios ----
 STUDIOS = {
     "lavandieres": {
         "label": "Lavandières",
@@ -170,7 +172,95 @@ STUDIOS = {
     },
 }
 
-# ---- Discipline / catégories pour router les prix ----
+# ==============================================================================
+# 6) PLANNING (MODE A) — À REMPLACER PAR TON PLANNING RÉEL
+# ==============================================================================
+#
+# Format :
+# PLANNING = {
+#   "docks": {
+#       "lundi": [("07:00", "Cross Training"), ("18:00", "Boxe")],
+#       "mardi": [...],
+#   },
+#   "lavandieres": {
+#       "lundi": [("08:00", "Reformer"), ("19:00", "Yoga")],
+#   }
+# }
+#
+# ⚠️ Remplace les EXEMPLES ci-dessous par ton planning officiel exact.
+# ==============================================================================
+
+PLANNING: Dict[str, Dict[str, List[Tuple[str, str]]]] = {
+    "docks": {
+        "lundi": [
+            ("07:00", "Cross Training"),
+            ("12:30", "Cross Core"),
+            ("18:30", "Boxe"),
+        ],
+        "mardi": [
+            ("07:00", "Cross Training"),
+            ("12:30", "Hyrox"),
+            ("19:00", "Danse"),
+        ],
+        "mercredi": [
+            ("07:00", "Cross Training"),
+            ("12:30", "Cross Body"),
+            ("18:30", "Boxe"),
+        ],
+        "jeudi": [
+            ("07:00", "Cross Training"),
+            ("12:30", "Cross Core"),
+            ("19:00", "Yoga"),
+        ],
+        "vendredi": [
+            ("07:00", "Cross Training"),
+            ("12:30", "Hyrox"),
+            ("18:00", "Cross Body"),
+        ],
+        "samedi": [
+            ("10:00", "Cross Training"),
+            ("11:00", "Boxe"),
+        ],
+        "dimanche": [],
+    },
+    "lavandieres": {
+        "lundi": [
+            ("08:00", "Reformer"),
+            ("12:30", "Crossformer"),
+            ("19:00", "Yoga"),
+        ],
+        "mardi": [
+            ("08:00", "Reformer"),
+            ("12:30", "Crossformer"),
+            ("20:00", "Pilates Tapis"),
+        ],
+        "mercredi": [
+            ("08:00", "Reformer"),
+            ("12:30", "Crossformer"),
+            ("19:00", "Reformer"),
+        ],
+        "jeudi": [
+            ("08:00", "Reformer"),
+            ("12:30", "Crossformer"),
+            ("19:00", "Yoga"),
+        ],
+        "vendredi": [
+            ("08:00", "Reformer"),
+            ("12:30", "Crossformer"),
+            ("18:30", "Reformer"),
+        ],
+        "samedi": [
+            ("10:00", "Reformer"),
+            ("11:00", "Crossformer"),
+        ],
+        "dimanche": [],
+    },
+}
+
+# ==============================================================================
+# 7) Discipline / catégories (routing prix)
+# ==============================================================================
+
 DISCIPLINE_TO_CATEGORY = {
     # Machines
     "reformer": "machine",
@@ -196,22 +286,23 @@ DISCIPLINE_TO_CATEGORY = {
     "enfants": "kids",
 }
 
-# ---- Pass mensuels (ceux que tu avais dans ton code) ----
-# Si ton site change, modifie ici.
+# ==============================================================================
+# 8) Pass mensuels
+# ==============================================================================
 @dataclass(frozen=True)
 class PassPrice:
     sessions: int
-    price: float  # euros
+    price: float
 
 @dataclass(frozen=True)
 class PassConfig:
     key: str
     label: str
-    category: str          # "training" / "machine" / "kids"
-    studio_hint: str       # Docks / Lavandières / Mixte
+    category: str
+    studio_hint: str
     includes: str
     duration_min: int
-    prices: Dict[int, PassPrice]  # sessions -> price
+    prices: Dict[int, PassPrice]
 
 PASS_CONFIGS: Dict[str, PassConfig] = {}
 
@@ -322,7 +413,7 @@ add_pass(PassConfig(
     }
 ))
 
-# Kids (tarifs limités)
+# Kids
 add_pass(PassConfig(
     key="kids",
     label="Pass Kids",
@@ -337,41 +428,35 @@ add_pass(PassConfig(
 ))
 
 # ==============================================================================
-# 6) Helpers format / parsing
+# 9) Helpers
 # ==============================================================================
-
 def eur(value: float) -> str:
-    # 60.30 -> "60,30€"
     return f"{value:,.2f}€".replace(",", " ").replace(".", ",")
 
 def normalize(text: str) -> str:
     return (text or "").strip().lower()
 
 def find_sessions_count(text: str) -> Optional[int]:
-    # capture 2/4/6/8/10/12
     m = re.search(r"\b(2|4|6|8|10|12)\b", normalize(text))
-    if m:
-        return int(m.group(1))
-    return None
+    return int(m.group(1)) if m else None
 
 def find_pass_key(text: str) -> Optional[str]:
     t = normalize(text)
-
-    # mapping "user words" -> pass key
     patterns = [
         ("full former", "full_former"),
         ("fullformer", "full_former"),
         ("reformer", "reformer"),
         ("crossformer", "crossformer"),
         ("pass cross", "cross"),
-        ("cross", "cross"),
         ("pass focus", "focus"),
-        ("focus", "focus"),
         ("pass full", "full"),
-        ("full", "full"),
         ("kids", "kids"),
         ("enfant", "kids"),
         ("enfants", "kids"),
+        # fallback words
+        ("focus", "focus"),
+        ("cross", "cross"),
+        ("full", "full"),
     ]
     for needle, key in patterns:
         if needle in t:
@@ -380,17 +465,52 @@ def find_pass_key(text: str) -> Optional[str]:
 
 def unit_price_from_pass(pass_key: str, sessions: int) -> Optional[float]:
     p = PASS_CONFIGS.get(pass_key)
-    if not p:
+    if not p or sessions not in p.prices:
         return None
-    if sessions not in p.prices:
-        return None
-    total = p.prices[sessions].price
-    return round(total / sessions, 2)
+    return round(p.prices[sessions].price / sessions, 2)
+
+def detect_day(text: str) -> Optional[str]:
+    t = normalize(text)
+    days = {
+        "lundi": ["lundi"],
+        "mardi": ["mardi"],
+        "mercredi": ["mercredi"],
+        "jeudi": ["jeudi"],
+        "vendredi": ["vendredi"],
+        "samedi": ["samedi"],
+        "dimanche": ["dimanche"],
+        "aujourd'hui": ["aujourd", "aujourd’hui", "aujourdhui"],
+        "demain": ["demain"],
+    }
+    # on ne fait pas de calcul de date ici, juste mots simples
+    for d, keys in days.items():
+        if any(k in t for k in keys):
+            return d
+    return None
+
+def detect_studio(text: str) -> Optional[str]:
+    t = normalize(text)
+    if "dock" in t or "docks" in t or "parc des docks" in t:
+        return "docks"
+    if "lavand" in t or "lavandi" in t:
+        return "lavandieres"
+    return None
+
+def detect_discipline(text: str) -> Optional[str]:
+    t = normalize(text)
+    # simple match : retourne la discipline clé la plus probable
+    keys = [
+        "reformer", "crossformer", "cross training", "cross", "boxe", "danse",
+        "yoga", "pilates tapis", "tapis", "hyrox", "core", "body", "kids"
+    ]
+    for k in keys:
+        if k in t:
+            return k
+    return None
 
 # ==============================================================================
-# 7) Détection d’intentions (deterministic router)
+# 10) Intents
 # ==============================================================================
-
 def is_human_request(text: str) -> bool:
     t = normalize(text)
     return any(x in t for x in [
@@ -404,24 +524,18 @@ def is_signup_question(text: str) -> bool:
     return any(x in t for x in [
         "m'inscrire", "inscription", "inscrire", "s’inscrire", "s'inscrire",
         "abonner", "abonnement",
-        "créer un compte", "creer un compte",
         "identifiant", "identifiants", "mot de passe",
-        "connexion", "se connecter", "connecter"
+        "connexion", "se connecter", "connecter",
+        "je n'ai pas reçu", "j'ai pas reçu", "pas recu", "pas reçu", "mail", "email"
     ])
 
 def is_trial_question(text: str) -> bool:
     t = normalize(text)
-    return any(x in t for x in [
-        "essai", "séance d'essai", "seance d'essai",
-        "découverte", "decouverte", "tester", "test"
-    ])
+    return any(x in t for x in ["essai", "séance d'essai", "seance d'essai", "découverte", "decouverte", "tester"])
 
 def is_starter_question(text: str) -> bool:
     t = normalize(text)
-    return any(x in t for x in [
-        "starter", "new pass starter", "pass starter", "offre starter",
-        "99,90", "99.90", "99,9", "99.9", "99€"
-    ])
+    return any(x in t for x in ["starter", "pass starter", "offre starter", "99,90", "99.90"])
 
 def is_unit_price_question(text: str) -> bool:
     t = normalize(text)
@@ -441,33 +555,36 @@ def is_extra_session_question(text: str) -> bool:
 
 def is_pass_price_question(text: str) -> bool:
     t = normalize(text)
-    return any(x in t for x in [
-        "tarif", "prix", "coût", "cout", "combien",
-        "abonnement", "pass", "forfait"
-    ])
+    return any(x in t for x in ["tarif", "prix", "coût", "cout", "combien", "abonnement", "pass", "forfait"])
 
 def is_studio_access_question(text: str) -> bool:
     t = normalize(text)
+    return any(x in t for x in ["autre studio", "deux studios", "lavandi", "docks", "je peux réserver", "acces", "accès"])
+
+def is_planning_question(text: str) -> bool:
+    t = normalize(text)
     return any(x in t for x in [
-        "autre studio", "deux studios", "2 studios",
-        "lavandières", "lavandieres", "docks",
-        "je peux aller", "je peux réserver", "je peux reserver",
-        "accès", "acces", "réserver dans l'autre", "reserver dans l'autre"
+        "planning", "horaire", "horaires", "cours", "séance", "seance",
+        "quand", "disponible", "creneau", "créneau", "créneaux", "creneaux"
+    ])
+
+def is_support_app_question(text: str) -> bool:
+    t = normalize(text)
+    return any(x in t for x in [
+        "bug", "marche pas", "ne marche pas", "impossible", "erreur",
+        "connexion", "mot de passe", "identifiant", "application", "appli",
+        "paiement", "prélèvement", "prelevement"
     ])
 
 # ==============================================================================
-# 8) Réponses déterministes (tarifs/règles/inscription)
+# 11) Réponses déterministes
 # ==============================================================================
-
-HUMAN_ACKS = [
-    "OK 🙂", "Parfait.", "Je vois.", "Bien sûr.", "Top.", "D’accord.", "Yes.", "Très bien."
-]
+HUMAN_ACKS = ["OK 🙂", "Parfait.", "Je vois.", "Bien sûr.", "Top.", "D’accord.", "Yes.", "Très bien."]
 
 def ack() -> str:
     return random.choice(HUMAN_ACKS)
 
 def signup_answer() -> str:
-    # EXACTEMENT ce que tu as validé
     return (
         "Pour vous inscrire :\n\n"
         "1) Vous souscrivez votre abonnement en ligne.\n"
@@ -492,23 +609,19 @@ def starter_answer() -> str:
 
 def unit_price_answer(text: str) -> str:
     t = normalize(text)
-
-    # essaie de détecter si client parle training vs machine
     cat = None
     for k, v in DISCIPLINE_TO_CATEGORY.items():
         if k in t:
             cat = v
             break
 
-    # si pas trouvé, on propose les deux (officiel)
     if cat is None or cat not in ("training", "machine"):
         return (
             "À l’unité (sans abonnement) :\n"
             f"- Training : **{eur(UNIT_PRICE['training'])}**\n"
             f"- Machines : **{eur(UNIT_PRICE['machine'])}**\n\n"
-            "Vous cherchez plutôt un cours Training (Cross/Boxe/Yoga…) ou une Machine (Reformer/Crossformer) ?"
+            "Tu cherches plutôt un cours Training (Cross/Boxe/Yoga…) ou une Machine (Reformer/Crossformer) ?"
         )
-
     if cat == "training":
         return f"À l’unité (sans abonnement), un cours Training est à **{eur(UNIT_PRICE['training'])}**."
     if cat == "machine":
@@ -521,9 +634,7 @@ def unit_price_answer(text: str) -> str:
 
 def pass_price_answer(pass_key: str, sessions: int) -> Optional[str]:
     p = PASS_CONFIGS.get(pass_key)
-    if not p:
-        return None
-    if sessions not in p.prices:
+    if not p or sessions not in p.prices:
         return None
     total = p.prices[sessions].price
     unit = unit_price_from_pass(pass_key, sessions)
@@ -537,91 +648,125 @@ def pass_price_answer(pass_key: str, sessions: int) -> Optional[str]:
     )
 
 def extra_session_answer(text: str) -> str:
-    # OFFICIEL : prorata du pass
     pass_key = find_pass_key(text)
     sessions = find_sessions_count(text)
 
     if not pass_key or not sessions:
         return (
             "Pour que je calcule au prorata, il me faut :\n"
-            "1) votre pass (Cross / Focus / Full / Reformer / Crossformer / Full Former / Kids)\n"
+            "1) ton pass (Cross / Focus / Full / Reformer / Crossformer / Full Former / Kids)\n"
             "2) le nombre de sessions (2/4/6/8/10/12)\n\n"
             "Exemple : *Pass Cross 4* → prix séance = (prix du pass / 4)."
         )
 
-    # Kids : on peut aussi faire prorata (puisque tu as dit Q2/A général),
-    # donc on applique pareil, sauf si tu veux une règle spéciale plus tard.
     u = unit_price_from_pass(pass_key, sessions)
     if u is None:
         return (
             "Je peux le calculer, mais je n’ai pas reconnu la formule exacte.\n"
-            "Dites-moi : Cross / Focus / Full / Reformer / Crossformer / Full Former + 2/4/6/8/10/12."
+            "Dis-moi : Cross / Focus / Full / Reformer / Crossformer / Full Former + 2/4/6/8/10/12."
         )
 
     p = PASS_CONFIGS[pass_key]
     total = p.prices[sessions].price
     return (
-        "Séance supplémentaire (au prorata de votre abonnement) :\n"
+        "Séance supplémentaire (au prorata de ton abonnement) :\n"
         f"- Formule : **{p.label} {sessions}**\n"
         f"- Calcul : {eur(total)} / {sessions} = **{eur(u)}**\n\n"
-        "Vous voulez l’ajouter sur quel cours (et quel studio) ?"
+        "Tu veux l’ajouter sur quel cours (et quel studio) ?"
     )
 
 def studio_access_answer(text: str) -> str:
-    # Q4 = D (ça dépend) => on ne doit surtout pas inventer.
-    # On pose une question claire pour trancher.
     return (
-        "Ça dépend de votre formule.\n"
-        "Dites-moi : vous avez quel abonnement (Cross / Focus / Full / Reformer / Crossformer / Full Former) "
-        "et vous voulez réserver dans quel studio (Docks ou Lavandières) ?"
+        "Ça dépend de ta formule.\n"
+        "Dis-moi : tu as quel abonnement (Cross / Focus / Full / Reformer / Crossformer / Full Former) "
+        "et tu veux réserver dans quel studio (Docks ou Lavandières) ?"
     )
 
+def planning_answer(text: str) -> str:
+    studio = detect_studio(text)
+    day = detect_day(text)
+    discipline = detect_discipline(text)
+
+    # si pas de studio, demander
+    if not studio:
+        return "Tu veux le planning de quel studio : **Docks** ou **Lavandières** ?"
+
+    # si pas de jour, proposer
+    if not day or day in ("aujourd'hui", "demain"):
+        # on ne calcule pas les dates ici pour éviter les erreurs, on demande le jour
+        return "Tu veux quel jour ? (lundi, mardi, mercredi, jeudi, vendredi, samedi, dimanche)"
+
+    day_key = day
+    if studio not in PLANNING or day_key not in PLANNING[studio]:
+        return "Je n’ai pas ce jour-là sous la main. Dis-moi le studio + le jour et je te le liste."
+
+    slots = PLANNING[studio][day_key]
+    if not slots:
+        return f"{STUDIOS[studio]['label']} — {day_key.capitalize()} : pas de cours affiché ce jour-là."
+
+    # filtrer par discipline si demandée
+    if discipline:
+        filtered = [(h, c) for (h, c) in slots if discipline.lower() in c.lower()]
+        if filtered:
+            slots_to_show = filtered
+        else:
+            slots_to_show = slots
+    else:
+        slots_to_show = slots
+
+    lines = [f"**{STUDIOS[studio]['label']} — {day_key.capitalize()}**"]
+    for h, c in slots_to_show:
+        lines.append(f"- {h} — {c}")
+    return "\n".join(lines)
+
 def human_alert_answer(reason: str = "") -> str:
-    # Réponse naturelle + tag pour afficher bouton
     if reason:
         return f"{reason}\n\n[HUMAN_ALERT]"
-    return "Je préfère vous mettre directement avec l’équipe pour être sûr à 100%. \n\n[HUMAN_ALERT]"
+    return "Je préfère te mettre avec l’équipe pour être sûr à 100%.\n\n[HUMAN_ALERT]"
 
 # ==============================================================================
-# 9) Router déterministe (priorités)
+# 12) Router déterministe
 # ==============================================================================
-
 def deterministic_router(user_text: str) -> Tuple[Optional[str], bool]:
-    """
-    Retourne (answer, needs_whatsapp)
-    Si answer None => on passe à Gemini.
-    """
-
-    # 1) Si demande un humain
-    if is_human_request(user_text):
-        ans = human_alert_answer("OK, je vous mets avec l’équipe 🙂")
+    # 0) support/app/paiement -> humain (évite erreurs)
+    if is_support_app_question(user_text) and ("prix" not in normalize(user_text)) and ("tarif" not in normalize(user_text)):
+        ans = human_alert_answer("Je préfère te mettre avec l’équipe pour régler ça rapidement 🙂")
         return ans.replace("[HUMAN_ALERT]", ""), True
 
-    # 2) Inscription (tu as donné le flow exact)
+    # 1) demande humain
+    if is_human_request(user_text):
+        ans = human_alert_answer("OK, je te mets avec l’équipe 🙂")
+        return ans.replace("[HUMAN_ALERT]", ""), True
+
+    # 2) planning
+    if is_planning_question(user_text):
+        return planning_answer(user_text), False
+
+    # 3) inscription
     if is_signup_question(user_text):
         return signup_answer(), False
 
-    # 3) Essai
+    # 4) essai
     if is_trial_question(user_text):
         return trial_answer(), False
 
-    # 4) Starter
+    # 5) starter
     if is_starter_question(user_text):
         return starter_answer(), False
 
-    # 5) Séance supplémentaire (prorata)
+    # 6) séance supp
     if is_extra_session_question(user_text):
         return extra_session_answer(user_text), False
 
-    # 6) Prix à l’unité (non abonné)
+    # 7) unité
     if is_unit_price_question(user_text):
         return unit_price_answer(user_text), False
 
-    # 7) Accès autre studio (ça dépend)
+    # 8) accès autre studio
     if is_studio_access_question(user_text):
         return studio_access_answer(user_text), False
 
-    # 8) Prix d’un pass si pass + sessions
+    # 9) prix pass (pass + sessions)
     if is_pass_price_question(user_text):
         pk = find_pass_key(user_text)
         s = find_sessions_count(user_text)
@@ -630,13 +775,11 @@ def deterministic_router(user_text: str) -> Tuple[Optional[str], bool]:
             if pp:
                 return pp, False
 
-    # sinon => Gemini
     return None, False
 
 # ==============================================================================
-# 10) Gemini — uniquement orientation / qualification (sans chiffres inventés)
+# 13) Gemini (orientation) + anti-hallucination prix
 # ==============================================================================
-
 def get_api_key() -> Optional[str]:
     try:
         if "GOOGLE_API_KEY" in st.secrets:
@@ -650,69 +793,61 @@ def get_model(api_key: str):
     genai.configure(api_key=api_key)
     return genai.GenerativeModel("gemini-2.5-flash")
 
-# Instructions système (humain + anti hallucination)
 SYSTEM_PROMPT = f"""
 Tu es Sarah (SVB). Tu réponds comme une vraie personne (naturel, simple, pas robot).
 Tu NE dis JAMAIS que tu es un bot/IA.
 
 RÈGLE ABSOLUE ANTI-ERREUR :
-- Tu n’inventes jamais un prix, un montant, une règle, un délai, une pénalité.
-- Si la question implique un chiffre/règle que tu n’as pas dans FACTS, tu réponds :
+- Tu n’inventes jamais un prix, un montant, une règle, un délai, une pénalité, un horaire.
+- Si la question implique un chiffre/règle/horaire que tu n’as pas dans FACTS, tu réponds :
   "Je préfère confirmer avec l’équipe" + [HUMAN_ALERT].
 
 STYLE :
 - Pas de présentation répétée.
 - Court, clair.
-- 0 à 2 questions de qualification max, seulement si nécessaire.
+- 0 à 2 questions de qualification max.
 - Pas de "Bienvenue chez SVB" à chaque message.
 
-FACTS AUTORISÉS (uniquement ceux-là) :
+FACTS AUTORISÉS :
 - Prix à l’unité : Training {eur(UNIT_PRICE['training'])} ; Machine {eur(UNIT_PRICE['machine'])}
 - Essai : {eur(TRIAL['price'])} (remboursé si inscription)
 - Starter : {eur(STARTER['price'])} / {STARTER['sessions']} sessions / 1 mois ; règle = {STARTER['discipline_rule']}
 - Séance supp abonné : au prorata du pass (prix du pass / nombre de sessions)
 - Inscription : paiement en ligne -> mail auto identifiants -> app (SVB/Sportigo) -> entrer identifiants -> réserver
+- Studios : Docks / Lavandières
 
-Ce que tu peux faire avec Gemini :
-- Reformuler, rassurer, orienter.
-- Poser des questions (objectif, niveau, préférence machine/training, studio).
-- Proposer un essai ou Starter.
-- Si besoin humain => [HUMAN_ALERT]
+Si besoin humain => [HUMAN_ALERT]
 """
 
-def build_gemini_contents(history: List[Dict[str, str]], user_text: str) -> List[Dict[str, Any]]:
-    """
-    Construit le payload Gemini sous forme de 'contents'.
-    On garde un historique court.
-    """
-    max_turns = 16
-    trimmed = history[-max_turns:]
-
+def build_gemini_contents(history: List[Dict[str, str]]) -> List[Dict[str, Any]]:
+    trimmed = history[-16:]
     contents = [{"role": "user", "parts": [{"text": SYSTEM_PROMPT}]}]
-
     for msg in trimmed:
         role = "user" if msg["role"] == "user" else "model"
         contents.append({"role": role, "parts": [{"text": msg["content"]}]})
-
-    # dernier user_text déjà dans history côté UI, mais on le remet si besoin:
-    # (on évite double injection; ici on fait confiance à l'historique affiché)
     return contents
 
+def response_contains_price_or_schedule(text: str) -> bool:
+    t = text or ""
+    # prix: € ou "euros" ou nombre + € ou "30 e"
+    if re.search(r"(\€|\beuro\b|\beuros\b)", t, flags=re.IGNORECASE):
+        return True
+    if re.search(r"\b\d{1,3}\s?€\b", t):
+        return True
+    # horaires: 07:00 / 7h / 19h30 / 19 h 30
+    if re.search(r"\b\d{1,2}:\d{2}\b", t):
+        return True
+    if re.search(r"\b\d{1,2}\s?h(\s?\d{2})?\b", t, flags=re.IGNORECASE):
+        return True
+    return False
+
 def gemini_answer(api_key: str, history: List[Dict[str, str]]) -> Tuple[str, bool]:
-    """
-    Appelle Gemini.
-    Retourne (text, needs_whatsapp)
-    """
     model = get_model(api_key)
-    contents = build_gemini_contents(history, "")
+    contents = build_gemini_contents(history)
 
     resp = model.generate_content(
         contents,
-        generation_config={
-            "temperature": 0.35,
-            "top_p": 0.9,
-            "max_output_tokens": 420,
-        },
+        generation_config={"temperature": 0.35, "top_p": 0.9, "max_output_tokens": 420},
     )
     text = (resp.text or "").strip()
     needs_whatsapp = False
@@ -721,22 +856,24 @@ def gemini_answer(api_key: str, history: List[Dict[str, str]]) -> Tuple[str, boo
         needs_whatsapp = True
         text = text.replace("[HUMAN_ALERT]", "").strip()
 
-    # fallback si vide
+    # Anti-hallucination chiffres/horaire
+    if response_contains_price_or_schedule(text):
+        safe = human_alert_answer("Je préfère confirmer ça avec l’équipe pour éviter une erreur 🙂")
+        return safe.replace("[HUMAN_ALERT]", ""), True
+
     if not text:
-        text = "Vous cherchez plutôt une séance Machine (Reformer/Crossformer) ou un cours Training (Cross/Boxe/Yoga) ?"
+        text = "Tu cherches plutôt une séance Machine (Reformer/Crossformer) ou un cours Training (Cross/Boxe/Yoga) ?"
 
     return text, needs_whatsapp
 
 # ==============================================================================
-# 11) "Humain" : ne pas se présenter sans arrêt
+# 14) "Humain" : accueil 1 seule fois
 # ==============================================================================
-
 def first_message() -> str:
-    # Accueil 1 seule fois, naturel
     variants = [
         "Salut 🙂 Tu cherches plutôt Machines (Reformer/Crossformer) ou Training (Cross/Boxe/Yoga) ?",
-        "Hello 🙂 Dis-moi ce que tu veux travailler (tonus, perte de poids, mobilité…) et je te guide.",
-        "OK, raconte-moi ce que tu recherches et je te propose la meilleure option.",
+        "Hello 🙂 Dis-moi ton objectif et je te guide (tonus, perte de poids, mobilité…).",
+        "OK 🙂 Tu veux des infos sur les tarifs, le planning, ou l’inscription ?",
     ]
     return random.choice(variants)
 
@@ -745,7 +882,6 @@ def ensure_session_state():
         st.session_state["did_greet"] = False
     if "messages" not in st.session_state:
         st.session_state["messages"] = []
-
     if not st.session_state["did_greet"] and len(st.session_state["messages"]) == 0:
         st.session_state["messages"].append({"role": "assistant", "content": first_message()})
         st.session_state["did_greet"] = True
@@ -753,46 +889,40 @@ def ensure_session_state():
 ensure_session_state()
 
 # ==============================================================================
-# 12) UI — Affichage historique
+# 15) UI — Affichage historique
 # ==============================================================================
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
 # ==============================================================================
-# 13) Chat loop
+# 16) Chat loop
 # ==============================================================================
 api_key = get_api_key()
 prompt = st.chat_input("Posez votre question...")
 
 if prompt:
-    # user message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # 1) déterministe d'abord
     det_answer, needs_whatsapp = deterministic_router(prompt)
 
     if det_answer is not None:
-        # option: ack humain léger parfois, sans spammer
-        # On évite d'ajouter un "OK" si réponse déjà courte
-        response_text = det_answer
         with st.chat_message("assistant"):
-            st.markdown(response_text)
-            st.session_state.messages.append({"role": "assistant", "content": response_text})
+            st.markdown(det_answer)
+            st.session_state.messages.append({"role": "assistant", "content": det_answer})
 
             if needs_whatsapp:
                 st.markdown("---")
                 st.link_button(WHATSAPP_LABEL, WHATSAPP_URL)
-
     else:
-        # 2) Gemini (orientation) — si pas de clé, on escalade humain plutôt que dire n'importe quoi
+        # Pas de déterministe => Gemini
         if not api_key:
-            response_text = human_alert_answer("Je peux vous répondre, mais je préfère vous mettre avec l’équipe pour aller vite.")
+            fallback = human_alert_answer("Je préfère te mettre avec l’équipe pour te répondre vite 🙂")
             with st.chat_message("assistant"):
-                st.markdown(response_text.replace("[HUMAN_ALERT]", ""))
-                st.session_state.messages.append({"role": "assistant", "content": response_text.replace("[HUMAN_ALERT]", "")})
+                st.markdown(fallback.replace("[HUMAN_ALERT]", ""))
+                st.session_state.messages.append({"role": "assistant", "content": fallback.replace("[HUMAN_ALERT]", "")})
                 st.markdown("---")
                 st.link_button(WHATSAPP_LABEL, WHATSAPP_URL)
         else:
@@ -808,10 +938,9 @@ if prompt:
                         st.markdown("---")
                         st.link_button(WHATSAPP_LABEL, WHATSAPP_URL)
 
-            except Exception as e:
+            except Exception:
                 log.exception("Erreur Gemini")
-                # En cas d'erreur, on ne sort pas une réponse hasardeuse.
-                fallback = human_alert_answer("Petit souci technique. Le plus simple : on vous répond sur WhatsApp.")
+                fallback = human_alert_answer("Petit souci technique. Le plus simple : on te répond sur WhatsApp.")
                 with st.chat_message("assistant"):
                     st.markdown(fallback.replace("[HUMAN_ALERT]", ""))
                     st.session_state.messages.append({"role": "assistant", "content": fallback.replace("[HUMAN_ALERT]", "")})
@@ -821,3 +950,7 @@ if prompt:
 # ==============================================================================
 # FIN
 # ==============================================================================
+
+# NOTE IMPORTANT POUR TOI :
+# - Remplace les horaires EXEMPLE dans PLANNING par ton planning exact.
+# - Une fois fait, Sarah donnera les horaires sans se tromper.
