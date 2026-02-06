@@ -3,27 +3,21 @@ import google.generativeai as genai
 import os
 
 # ==============================================================================
-# 1. CONFIGURATION & STYLE
+# 1. CONFIGURATION BASIQUE
 # ==============================================================================
-st.set_page_config(page_title="Sarah - SVB", page_icon="🧡", layout="centered")
+st.set_page_config(page_title="Sarah - SVB", page_icon="🧡")
 
+# On garde juste un tout petit peu de style pour le titre, rien qui casse l'affichage
 st.markdown("""
 <style>
-    .stApp { background-color: #fafafa; }
-    h1 { color: #E68D65; text-align: center; font-family: sans-serif; }
-    .stChatInput { position: fixed; bottom: 30px; }
-    .whatsapp-btn {
-        display: inline-block; background-color: #25D366; color: white; 
-        padding: 10px 20px; border-radius: 20px; text-decoration: none; font-weight: bold;
-        margin-top: 10px;
-    }
+    h1 { color: #E68D65; text-align: center; }
+    .stChatMessage { background-color: #f9f9f9; border-radius: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. LA "BIBLE" DU STUDIO (TOUTE LA VÉRITÉ EST ICI)
+# 2. LA "BIBLE" DU STUDIO (CERVEAU)
 # ==============================================================================
-# C'est ici que tu modifies les prix ou les règles. L'IA lira ça avant de répondre.
 
 INFO_STUDIO = """
 CONTEXTE : Tu es Sarah, l'assistante virtuelle du studio de sport "SVB" (Santez-Vous Bien).
@@ -121,15 +115,15 @@ Samedi/Dimanche : Matinées actives.
 """
 
 # ==============================================================================
-# 3. LE MOTEUR IA (SIMPLIFIÉ ET ROBUSTE)
+# 3. LE MOTEUR IA
 # ==============================================================================
 
 # Récupération Clé API
 api_key = None
-if "GOOGLE_API_KEY" in st.secrets:
-    api_key = st.secrets["GOOGLE_API_KEY"]
-else:
-    # Fallback pour le local
+try:
+    if "GOOGLE_API_KEY" in st.secrets:
+        api_key = st.secrets["GOOGLE_API_KEY"]
+except:
     api_key = os.getenv("GOOGLE_API_KEY")
 
 if not api_key:
@@ -138,7 +132,7 @@ if not api_key:
 
 # Configuration Gemini
 genai.configure(api_key=api_key)
-model = genai.GenerativeModel('gemini-1.5-flash') # Modèle rapide et intelligent
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 # Initialisation Mémoire
 if "messages" not in st.session_state:
@@ -154,15 +148,14 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# Traitement User
+# Zone de saisie (Standard Streamlit - Pas de CSS bizarre)
 if prompt := st.chat_input("Pose ta question ici..."):
     # 1. Afficher user
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # 2. Préparer le contexte pour l'IA
-    # On lui envoie la BIBLE + les 10 derniers messages pour qu'elle ait le contexte
+    # 2. Préparer le contexte
     history_context = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages[-10:]])
     
     full_prompt = f"""
@@ -173,22 +166,19 @@ if prompt := st.chat_input("Pose ta question ici..."):
     
     QUESTION DU CLIENT : {prompt}
     
-    CONSIGNES DE RÉPONSE :
-    1. Réponds en te basant UNIQUEMENT sur la section '{INFO_STUDIO}'.
-    2. Si la réponse est un prix, utilise le prix exact.
-    3. Si la réponse n'est pas dans le texte, dis : "Pour ce point précis, je vous invite à contacter Laura."
-    4. Sois courte, claire et chaleureuse.
-    5. Si la question nécessite une intervention humaine (problème, plainte), ajoute à la fin : [HUMAN_ALERT].
+    CONSIGNES :
+    - Réponds en utilisant UNIQUEMENT les infos ci-dessus.
+    - Si c'est un prix, sois précis.
+    - Si besoin d'aide humaine, ajoute [HUMAN_ALERT] à la fin.
     """
 
-    # 3. Génération Réponse
+    # 3. Réponse IA
     with st.chat_message("assistant"):
-        with st.spinner("Sarah réfléchit..."):
+        with st.spinner("..."):
             try:
                 response = model.generate_content(full_prompt)
                 text_response = response.text
                 
-                # Gestion bouton WhatsApp
                 show_wa = False
                 if "[HUMAN_ALERT]" in text_response:
                     show_wa = True
@@ -198,7 +188,8 @@ if prompt := st.chat_input("Pose ta question ici..."):
                 st.session_state.messages.append({"role": "assistant", "content": text_response})
                 
                 if show_wa:
-                    st.markdown(f'<a href="https://wa.me/33744919155" target="_blank" class="whatsapp-btn">📞 Contacter Laura sur WhatsApp</a>', unsafe_allow_html=True)
+                    st.markdown("---")
+                    st.link_button("📞 Contacter Laura (WhatsApp)", "https://wa.me/33744919155")
             
             except Exception as e:
-                st.error("Une erreur technique est survenue. Réessaie !")
+                st.error("Petit souci de connexion. Réessaie !")
