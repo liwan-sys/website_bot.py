@@ -1340,10 +1340,6 @@ def call_gemini(api_key: str, history: List[Dict[str, str]]) -> Tuple[str, bool]
     text = (resp.text or "").strip()
     needs_whatsapp = False
 
-    # Guardrails
-    if violates_guardrails(text):
-        return "Je préfère te répondre correctement : tu peux m’écrire sur WhatsApp et on te répond tout de suite 🙂", True
-
     # Si la personne demande humain (Gemini parfois propose)
     if "whatsapp" in norm2(text) or "equipe" in norm2(text) or "équipe" in norm2(text):
         # On ne force pas le bouton, sauf si c’est vraiment un renvoi direct
