@@ -3,74 +3,32 @@ import google.generativeai as genai
 import os
 
 # ==============================================================================
-# 1. CONFIGURATION FORCEE (MODE CLAIR OBLIGATOIRE)
+# 1. CONFIGURATION
 # ==============================================================================
 st.set_page_config(page_title="Sarah - SVB", page_icon="🧡", layout="centered")
 
-# CSS "NUCLÉAIRE" POUR FORCER L'AFFICHAGE
+# Juste le style du bouton WhatsApp (le reste est géré par config.toml)
 st.markdown("""
 <style>
-    /* 1. On force le fond de TOUTE l'application en BLANC */
-    .stApp {
-        background-color: #ffffff !important;
-    }
-
-    /* 2. On force TOUS les textes de base en NOIR */
-    p, div, label, h1, h2, h3, li, span {
-        color: #000000 !important;
-    }
-
-    /* 3. Le Titre en Orange */
-    h1 {
-        color: #E68D65 !important;
-        text-align: center;
-        font-family: sans-serif;
-    }
-
-    /* 4. Les Bulles de Chat (Assistant) */
-    .stChatMessage {
-        background-color: #f0f2f6 !important;
-        border: 1px solid #d5d5d5 !important;
-        color: #000000 !important;
-        border-radius: 10px !important;
-    }
-
-    /* 5. Les Bulles de Chat (Utilisateur) - Un peu plus foncé pour distinguer */
-    div[data-testid="stChatMessage"] {
-        background-color: #e3e3e3 !important;
-        color: #000000 !important;
-    }
-
-    /* 6. La zone de saisie (Chat Input) - CRITIQUE */
-    .stChatInputContainer {
-        background-color: #ffffff !important;
-    }
-    div[data-testid="stChatInput"] {
-        background-color: #ffffff !important;
-        color: #000000 !important;
-        border: 1px solid #000000 !important;
-    }
-    /* Le texte qu'on tape dans la barre */
-    textarea {
-        color: #000000 !important;
-        background-color: #ffffff !important;
-    }
-
-    /* 7. Bouton WhatsApp */
     .whatsapp-btn {
-        background-color: #25D366 !important;
+        background-color: #25D366;
         color: white !important;
         padding: 10px 20px;
         text-decoration: none;
-        border-radius: 5px;
+        border-radius: 8px;
         display: inline-block;
         font-weight: bold;
+        text-align: center;
+    }
+    .whatsapp-btn:hover {
+        color: white !important;
+        background-color: #1ebc57;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. LA BIBLE DU STUDIO (DONNÉES)
+# 2. BIBLE DU STUDIO
 # ==============================================================================
 INFO_STUDIO = """
 CONTEXTE : Tu es Sarah, l'assistante virtuelle du studio de sport "SVB" (Santez-Vous Bien).
@@ -121,7 +79,6 @@ MODIFICATION : Upgrade = Oui. Downgrade = Non (pendant 3 mois).
 # 3. MOTEUR IA
 # ==============================================================================
 
-# Clé API
 api_key = None
 try:
     if "GOOGLE_API_KEY" in st.secrets:
@@ -130,33 +87,28 @@ except:
     api_key = os.getenv("GOOGLE_API_KEY")
 
 if not api_key:
-    st.warning("⚠️ Clé API introuvable.")
+    st.error("⚠️ Clé API manquante.")
     st.stop()
 
 genai.configure(api_key=api_key)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
-# Initialisation
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "assistant", "content": "Bonjour ! Je suis Sarah. Je connais tout sur le studio SVB (Tarifs, Planning, Règles). Comment puis-je t'aider ?"}
+        {"role": "assistant", "content": "Bonjour ! Je suis Sarah. Je connais tout sur SVB (Tarifs, Planning, Règles). Comment puis-je t'aider ?"}
     ]
 
-# Affichage Titre
 st.title("🧡 Studio SVB")
 
-# Affichage Messages
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# Saisie
 if prompt := st.chat_input("Pose ta question ici..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Réponse IA
     history_context = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages[-6:]])
     full_prompt = f"{INFO_STUDIO}\n\nHISTORIQUE:\n{history_context}\n\nQUESTION: {prompt}\n\nRéponds court et précis. Si besoin aide humaine -> [HUMAN_ALERT]."
 
