@@ -3,51 +3,74 @@ import google.generativeai as genai
 import os
 
 # ==============================================================================
-# 1. CONFIGURATION VISUELLE (LISIBILITÉ MAXIMALE)
+# 1. CONFIGURATION FORCEE (MODE CLAIR OBLIGATOIRE)
 # ==============================================================================
 st.set_page_config(page_title="Sarah - SVB", page_icon="🧡", layout="centered")
 
-# CSS FORCE POUR LE CONTRASTE (NOIR SUR BLANC)
+# CSS "NUCLÉAIRE" POUR FORCER L'AFFICHAGE
 st.markdown("""
 <style>
-    /* Force le fond global en blanc */
+    /* 1. On force le fond de TOUTE l'application en BLANC */
     .stApp {
-        background-color: #ffffff;
-        color: #000000;
-    }
-    
-    /* Style des bulles de chat pour qu'elles soient bien visibles */
-    .stChatMessage {
-        background-color: #f0f2f6; /* Gris très clair */
-        color: #000000; /* Texte noir */
-        border-radius: 15px;
-        border: 1px solid #e0e0e0;
-        margin-bottom: 10px;
-    }
-    
-    /* Force le texte utilisateur en noir */
-    .stChatMessage[data-testid="stChatMessageUser"] {
-        background-color: #e8f0fe; /* Bleu très clair */
-        color: #000000;
+        background-color: #ffffff !important;
     }
 
-    /* Le titre en orange SVB */
+    /* 2. On force TOUS les textes de base en NOIR */
+    p, div, label, h1, h2, h3, li, span {
+        color: #000000 !important;
+    }
+
+    /* 3. Le Titre en Orange */
     h1 {
-        color: #E68D65;
+        color: #E68D65 !important;
         text-align: center;
         font-family: sans-serif;
     }
 
-    /* Zone de saisie en bas */
-    .stChatInput {
-        background-color: #ffffff;
-        color: #000000;
+    /* 4. Les Bulles de Chat (Assistant) */
+    .stChatMessage {
+        background-color: #f0f2f6 !important;
+        border: 1px solid #d5d5d5 !important;
+        color: #000000 !important;
+        border-radius: 10px !important;
+    }
+
+    /* 5. Les Bulles de Chat (Utilisateur) - Un peu plus foncé pour distinguer */
+    div[data-testid="stChatMessage"] {
+        background-color: #e3e3e3 !important;
+        color: #000000 !important;
+    }
+
+    /* 6. La zone de saisie (Chat Input) - CRITIQUE */
+    .stChatInputContainer {
+        background-color: #ffffff !important;
+    }
+    div[data-testid="stChatInput"] {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        border: 1px solid #000000 !important;
+    }
+    /* Le texte qu'on tape dans la barre */
+    textarea {
+        color: #000000 !important;
+        background-color: #ffffff !important;
+    }
+
+    /* 7. Bouton WhatsApp */
+    .whatsapp-btn {
+        background-color: #25D366 !important;
+        color: white !important;
+        padding: 10px 20px;
+        text-decoration: none;
+        border-radius: 5px;
+        display: inline-block;
+        font-weight: bold;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. LA "BIBLE" DU STUDIO (INTELLIGENCE)
+# 2. LA BIBLE DU STUDIO (DONNÉES)
 # ==============================================================================
 INFO_STUDIO = """
 CONTEXTE : Tu es Sarah, l'assistante virtuelle du studio de sport "SVB" (Santez-Vous Bien).
@@ -116,7 +139,7 @@ model = genai.GenerativeModel('gemini-1.5-flash')
 # Initialisation
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "assistant", "content": "Bonjour ! Je suis Sarah. Je connais tout sur SVB (Tarifs, Planning, Règles). Comment puis-je t'aider ?"}
+        {"role": "assistant", "content": "Bonjour ! Je suis Sarah. Je connais tout sur le studio SVB (Tarifs, Planning, Règles). Comment puis-je t'aider ?"}
     ]
 
 # Affichage Titre
@@ -153,6 +176,6 @@ if prompt := st.chat_input("Pose ta question ici..."):
                 
                 if show_wa:
                     st.markdown("---")
-                    st.link_button("📞 WhatsApp Laura", "https://wa.me/33744919155")
+                    st.markdown(f'<a href="https://wa.me/33744919155" target="_blank" class="whatsapp-btn">📞 WhatsApp Laura</a>', unsafe_allow_html=True)
             except:
                 st.error("Erreur de connexion.")
