@@ -10,27 +10,12 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 import streamlit as st
 
 from knowledge import (
-    CONTACT,
-    STUDIOS,
-    UNIT_PRICE,
-    TRIAL,
-    STARTER,
-    BOOST,
-    FEES_AND_ENGAGEMENT,
-    COACHING,
-    PASS,
-    KIDS,
-    RULES,
-    PARRAINAGE,
-    DAY_ORDER,
-    SLOTS,
-    DEFINITIONS,
-    PASS_INCLUDES,
+    CONTACT, STUDIOS, UNIT_PRICE, TRIAL, STARTER, BOOST,
+    FEES_AND_ENGAGEMENT, COACHING, PASS, KIDS,
+    RULES, PARRAINAGE, DAY_ORDER, SLOTS,
+    DEFINITIONS, PASS_INCLUDES,
 )
 
-# ------------------------------------------------------------------------------
-# LOGGING
-# ------------------------------------------------------------------------------
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("SVB_SARAH")
 
@@ -62,7 +47,6 @@ st.markdown(
   color:#4A4A4A;
 }
 #MainMenu, footer, header {visibility:hidden;}
-
 h1{
   font-family:'Dancing Script',cursive;
   color:#8FB592;
@@ -103,7 +87,6 @@ h1{
   text-transform:uppercase;
 }
 .stButton button:hover{ transform: scale(1.02); }
-small { color:#555; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -116,7 +99,7 @@ st.markdown("<h1>Sarah</h1>", unsafe_allow_html=True)
 st.markdown("<div class='subtitle'>SVB</div>", unsafe_allow_html=True)
 
 # ==============================================================================
-# HELPERS — NORMALISATION / FORMAT
+# HELPERS
 # ==============================================================================
 
 def eur(x: float) -> str:
@@ -143,21 +126,30 @@ def strip_accents_cheap(s: str) -> str:
 def norm2(s: str) -> str:
     return strip_accents_cheap(norm(s))
 
-def safe_finalize(text: str) -> str:
-    """Évite les fins 'coupées' côté LLM ou texte sans ponctuation."""
-    t = (text or "").strip()
-    if not t:
-        return t
-    if re.search(r"[A-Za-zÀ-ÖØ-öø-ÿ0-9]$", t) and not re.search(r"[\.!\?…]$", t):
-        return t + " 🙂"
-    return t
-
 def has_any(text: str, words: List[str]) -> bool:
     t = norm2(text)
     return any(w in t for w in words)
 
+def safe_finalize(text: str) -> str:
+    """Empêche les fins de phrase ‘coupées’ / sans ponctuation."""
+    t = (text or "").strip()
+    if not t:
+        return t
+    # si finit par une conjonction => on remplace par une question claire
+    tail = norm2(t).split()[-1] if norm2(t).split() else ""
+    if tail in {"si", "mais", "car", "donc", "parce", "parceque", "alors"}:
+        return "Tu pensais à l’unité ou en abonnement (2/4/6/8/10/12 sessions) ? 🙂"
+    # si pas de ponctuation finale => on ajoute un petit ‘🙂’
+    if re.search(r"[A-Za-zÀ-ÖØ-öø-ÿ0-9]$", t) and not re.search(r"[\.!\?…]$", t):
+        return t + " 🙂"
+    return t
+
+def wa_button() -> None:
+    st.markdown("---")
+    st.link_button(CONTACT["whatsapp_label"], CONTACT["whatsapp_url"])
+
 # ==============================================================================
-# EXTRACTION — STUDIO / JOUR / COURS / SESSIONS / OBJECTIFS
+# EXTRACTION — studio / jour / cours / sessions / pass
 # ==============================================================================
 
 def extract_studio(text: str) -> Optional[str]:
@@ -179,11 +171,16 @@ def find_sessions_count(text: str) -> Optional[int]:
     m = re.search(r"\b(2|4|6|8|10|12)\b", norm2(text))
     return int(m.group(1)) if m else None
 
+def intent_sessions_only(text: str) -> bool:
+    # ex: "4", "4 session", "4 séances"
+    return re.match(r"^\s*(2|4|6|8|10|12)\s*(seance|seances|séance|séances|session|sessions)?\s*$", text.strip(), re.I) is not None
+
 def find_pass_key(text: str) -> Optional[str]:
     t = norm2(text)
     patterns = [
         ("full former", "full_former"),
         ("fullformer", "full_former"),
+        ("pass full former", "full_former"),
         ("crossformer", "crossformer"),
         ("pass crossformer", "crossformer"),
         ("reformer", "reformer"),
@@ -203,81 +200,89 @@ def find_pass_key(text: str) -> Optional[str]:
     return None
 
 def extract_course_key(text: str) -> Optional[str]:
-    """Retourne une clé canonique de cours."""
     t = norm2(text)
-
     aliases = {
-        # machines
-        "crossformer": "crossformer",
-        "cross-former": "crossformer",
-        "cross former": "crossformer",
         "reformer": "reformer",
         "pilate reformer": "reformer",
         "pilates reformer": "reformer",
-        "pilate crossformer": "crossformer",
+        "crossformer": "crossformer",
+        "cross-former": "crossformer",
+        "cross former": "crossformer",
         "pilates crossformer": "crossformer",
-
-        # docks
-        "cross training": "cross training",
-        "cross-training": "cross training",
-        "cross core": "cross core",
-        "cross-core": "cross core",
-        "cross body": "cross body",
-        "cross-body": "cross body",
-        "cross rox": "cross rox",
-        "cross-rox": "cross rox",
-        "cross yoga": "cross yoga",
-        "cross-yoga": "cross yoga",
-
         "boxe": "boxe",
         "boxing": "boxe",
-
         "afrodance": "afrodance",
-        "afrodance'all": "afrodance",
         "afrodance all": "afrodance",
-
-        # yoga/pilates sol
+        "afrodance'all": "afrodance",
+        "cross training": "cross training",
+        "cross-core": "cross core",
+        "cross core": "cross core",
+        "cross-body": "cross body",
+        "cross body": "cross body",
+        "cross-rox": "cross rox",
+        "cross rox": "cross rox",
+        "cross-yoga": "cross yoga",
+        "cross yoga": "cross yoga",
         "yoga vinyasa": "yoga vinyasa",
         "vinyasa": "yoga vinyasa",
         "hatha flow": "hatha flow",
         "hatha": "hatha flow",
         "classic pilates": "classic pilates",
-        "pilates classic": "classic pilates",
         "power pilates": "power pilates",
         "core & stretch": "core & stretch",
         "core and stretch": "core & stretch",
         "core stretch": "core & stretch",
         "stretch": "core & stretch",
-
-        # kids
         "yoga kids": "yoga kids",
         "training kids": "training kids",
     }
-
     for k in sorted(aliases.keys(), key=len, reverse=True):
         if k in t:
             return aliases[k]
     return None
 
-GOAL_KEYWORDS = {
-    "dos": ["dos", "lombaire", "sciatique", "posture"],
-    "tonus": ["tonifier", "tonus", "raffermir", "fessier", "ventre"],
-    "cardio": ["cardio", "transpirer", "perdre du poids", "maigrir", "souffle"],
-    "mobilite": ["souplesse", "mobilite", "mobilité", "flexibilite", "flexibilité", "etire", "étire"],
-    "stress": ["stress", "detente", "détente", "relax", "relaxation"],
-    "debutant": ["debutant", "débutant", "jamais", "premiere fois", "première fois"],
-}
+def canonical_to_course_name(ck: str) -> Optional[str]:
+    """Pour relier la clé canonique à un nom exact dans PASS_INCLUDES."""
+    mapping = {
+        "reformer": "Reformer",
+        "crossformer": "Cross-Former",
+        "boxe": "Boxe",
+        "afrodance": "Afrodance'All",
+        "cross training": "Cross Training",
+        "cross core": "Cross Core",
+        "cross body": "Cross Body",
+        "cross rox": "Cross Rox",
+        "cross yoga": "Cross Yoga",
+        "yoga vinyasa": "Yoga Vinyasa",
+        "hatha flow": "Hatha Flow",
+        "classic pilates": "Classic Pilates",
+        "power pilates": "Power Pilates",
+        "core & stretch": "Core & Stretch",
+        "yoga kids": "Yoga Kids",
+        "training kids": "Training Kids",
+    }
+    return mapping.get(ck)
 
-def extract_goals(text: str) -> Set[str]:
-    t = norm2(text)
-    found: Set[str] = set()
-    for k, arr in GOAL_KEYWORDS.items():
-        if any(norm2(w) in t for w in arr):
-            found.add(k)
-    return found
+def infer_pass_from_course(ck: Optional[str]) -> Optional[str]:
+    if not ck:
+        return None
+    course_name = canonical_to_course_name(ck)
+    if not course_name:
+        return None
+    for pk, courses in PASS_INCLUDES.items():
+        if course_name in courses:
+            # on renvoie la formule la plus “directe” (pas full par défaut)
+            return pk
+    return None
+
+def pass_unit_price(pass_key: str, sessions: int) -> Optional[float]:
+    p = PASS.get(pass_key)
+    if not p or sessions not in p.prices:
+        return None
+    return round(p.prices[sessions].total / sessions, 2)
 
 # ==============================================================================
-# MÉMO CONVERSATION — petit "cerveau" deterministic
+# MÉMO CONVERSATION (profil)
 # ==============================================================================
 
 def ensure_state() -> None:
@@ -288,10 +293,10 @@ def ensure_state() -> None:
     if "profile" not in st.session_state:
         st.session_state.profile = {
             "studio": None,
-            "course": None,
-            "goals": set(),
-            "sessions": None,
-            "pass_key": None,
+            "course": None,     # ex: "reformer"
+            "pass_key": None,   # ex: "reformer"/"focus"/"cross"...
+            "sessions": None,   # 2/4/6/8/10/12
+            "last_topic": None, # "price" / "planning" / ...
         }
 
 def update_profile_from_text(text: str) -> None:
@@ -302,23 +307,19 @@ def update_profile_from_text(text: str) -> None:
     ck = extract_course_key(text)
     if ck:
         p["course"] = ck
-    goals = extract_goals(text)
-    if goals:
-        p["goals"] = set(p["goals"]) | goals
-    n = find_sessions_count(text)
-    if n:
-        p["sessions"] = n
     pk = find_pass_key(text)
     if pk:
         p["pass_key"] = pk
+    n = find_sessions_count(text)
+    if n:
+        p["sessions"] = n
 
 def first_message() -> str:
-    variants = [
+    return random.choice([
         "Salut 🙂 Tu cherches plutôt Machines (Reformer/Crossformer) ou Training (Cross/Boxe/Yoga) ?",
         "Hello 🙂 Dis-moi ton objectif (tonus, cardio, dos, mobilité…) et je te guide.",
         "OK 🙂 Tu veux plutôt venir aux Docks ou aux Lavandières ?",
-    ]
-    return random.choice(variants)
+    ])
 
 ensure_state()
 if not st.session_state.did_greet and len(st.session_state.messages) == 0:
@@ -326,21 +327,24 @@ if not st.session_state.did_greet and len(st.session_state.messages) == 0:
     st.session_state.did_greet = True
 
 # ==============================================================================
-# INTENTS (plus précis pour éviter les réponses à côté)
+# INTENTS (plus précis)
 # ==============================================================================
 
 def intent_human(text: str) -> bool:
     return has_any(text, ["humain", "conseiller", "equipe", "équipe", "whatsapp", "joindre", "appeler", "telephone", "téléphone"])
 
-def intent_signup(text: str) -> bool:
-    # IMPORTANT: PAS "abonnement" tout seul
-    return has_any(text, ["m'inscrire", "inscrire", "inscription", "creer un compte", "créer un compte", "identifiant", "mot de passe", "connexion", "connecter", "appli", "application", "sportigo"])
-
 def intent_pause_subscription(text: str) -> bool:
     return has_any(text, ["pause", "mettre en pause", "suspendre", "suspension", "arreter provisoirement", "stopper provisoirement"])
 
 def intent_rules(text: str) -> bool:
-    return has_any(text, ["annulation", "annuler", "report", "reporter", "cumul", "resiliation", "résiliation", "preavis", "préavis", "retard", "chaussette", "chaussettes", "reglement", "règlement", "interieur", "intérieur", "absence"])
+    return has_any(text, ["annulation", "annuler", "report", "reporter", "cumul", "resiliation", "résiliation",
+                          "preavis", "préavis", "retard", "chaussette", "chaussettes", "reglement", "règlement",
+                          "interieur", "intérieur", "absence"])
+
+def intent_signup(text: str) -> bool:
+    # IMPORTANT: pas "abonnement" seul
+    return has_any(text, ["m'inscrire", "inscrire", "inscription", "creer un compte", "créer un compte",
+                          "identifiant", "mot de passe", "connexion", "connecter", "appli", "application", "sportigo"])
 
 def intent_trial(text: str) -> bool:
     return has_any(text, ["essai", "seance d'essai", "séance d'essai", "tester", "decouverte", "découverte"])
@@ -361,24 +365,17 @@ def intent_planning(text: str) -> bool:
     return has_any(text, ["planning", "horaire", "horaires", "quel jour", "quels jours", "a quelle heure", "à quelle heure", "quand"])
 
 def intent_pass_info(text: str) -> bool:
-    return has_any(text, ["c'est quoi le pass", "c est quoi le pass", "donne acces", "donne accès", "ça donne accès", "inclut", "comprend", "pass focus", "pass cross", "pass full", "pass reformer", "pass crossformer", "full former"])
+    return has_any(text, ["donne acces", "donne accès", "ça donne accès", "inclut", "comprend", "c'est quoi le pass", "pass "])
 
-def intent_pass_price(text: str) -> bool:
-    return has_any(text, ["tarif", "prix", "combien", "coute", "coûte", "abonnement", "forfait", "mensuel", "mois"])
+def intent_price(text: str) -> bool:
+    return has_any(text, ["tarif", "prix", "combien", "coute", "coûte", "mensuel", "mois", "abonnement", "forfait"])
 
 def intent_unit_price(text: str) -> bool:
     return has_any(text, ["a l'unite", "à l'unité", "sans abonnement", "sans abo", "unité", "unite"])
 
-def intent_interest(text: str) -> bool:
-    return has_any(text, ["je veux", "j'aimerais", "je voudrais", "je cherche", "je souhaite", "je suis interesse", "je suis intéressé"])
-
 # ==============================================================================
 # RÉPONSES DÉTERMINISTES
 # ==============================================================================
-
-def wa_button() -> None:
-    st.markdown("---")
-    st.link_button(CONTACT["whatsapp_label"], CONTACT["whatsapp_url"])
 
 def answer_signup() -> str:
     return safe_finalize(
@@ -395,7 +392,7 @@ def answer_pause() -> str:
     return safe_finalize(
         "Oui c’est possible 🙂\n\n"
         f"📌 {RULES['suspension_absence']}\n\n"
-        "Si tu me dis ton pass (Cross/Focus/Full/Reformer/Crossformer) je te dis la marche à suivre la plus simple."
+        "Si tu veux, dis-moi ton pass et je te dis la marche à suivre la plus simple."
     )
 
 def answer_trial() -> str:
@@ -421,102 +418,6 @@ def answer_boost() -> str:
 
 def answer_parrainage() -> str:
     return safe_finalize(PARRAINAGE)
-
-def pass_unit_price(pass_key: str, sessions: int) -> Optional[float]:
-    p = PASS.get(pass_key)
-    if not p or sessions not in p.prices:
-        return None
-    total = p.prices[sessions].total
-    return round(total / sessions, 2)
-
-def answer_pass_price(pass_key: str, sessions: int) -> Optional[str]:
-    p = PASS.get(pass_key)
-    if not p or sessions not in p.prices:
-        return None
-    total = p.prices[sessions].total
-    unit = pass_unit_price(pass_key, sessions)
-    extra = ""
-    if pass_key == "kids":
-        extra = f"\n- Séance supplémentaire kids : **{eur(KIDS['extra_session'])}**"
-    studio_txt = STUDIOS[p.where]["label"] if p.where in STUDIOS else p.where
-    return safe_finalize(
-        f"📌 **{p.label}** — {sessions} sessions / mois\n"
-        f"- Total : **{eur(total)}**\n"
-        f"- Prix / séance (calcul) : **{eur(unit)}**\n"
-        f"- Durée : {p.duration_min} min\n"
-        f"- Studio : {studio_txt}\n"
-        f"{extra}"
-    )
-
-def course_to_pass_options(course_name: str) -> List[str]:
-    options = []
-    for pk, courses in PASS_INCLUDES.items():
-        if course_name in courses:
-            mapping = {
-                "cross": "Pass Cross",
-                "focus": "Pass Focus",
-                "full": "Pass Full",
-                "reformer": "Pass Reformer",
-                "crossformer": "Pass Crossformer",
-                "full_former": "Pass Full Former",
-                "kids": "Pass Kids",
-            }
-            options.append(mapping.get(pk, pk))
-    order = {"Pass Reformer": 1, "Pass Crossformer": 2, "Pass Full Former": 3, "Pass Cross": 4, "Pass Focus": 5, "Pass Full": 6, "Pass Kids": 7}
-    return sorted(set(options), key=lambda x: order.get(x, 99))
-
-def answer_pass_info(text: str) -> str:
-    pk = find_pass_key(text)
-    t = norm2(text)
-
-    if ("premium" in t or "plus premium" in t or "je veux tout" in t or "mixer" in t) and pk in (None, "focus", "cross"):
-        pk = "full"
-
-    if pk is None:
-        return safe_finalize(
-            "Tu parles de quel pass ?\n"
-            "- Pass Cross\n- Pass Focus\n- Pass Full\n- Pass Reformer\n- Pass Crossformer\n- Pass Full Former\n\n"
-            "Dis-moi juste le nom et je te détaille ce que ça inclut 🙂"
-        )
-
-    pretty = {
-        "cross": "Pass Cross",
-        "focus": "Pass Focus",
-        "full": "Pass Full",
-        "reformer": "Pass Reformer",
-        "crossformer": "Pass Crossformer",
-        "full_former": "Pass Full Former",
-        "kids": "Pass Kids",
-    }.get(pk, pk)
-
-    if pk in PASS_INCLUDES:
-        items = sorted(PASS_INCLUDES[pk])
-        bullets = "\n".join([f"- {x}" for x in items])
-        note = ""
-        if pk == "focus":
-            note = "\n\n📌 À noter : **Cross Training / Cross Core / Cross Body / Cross Rox / Cross Yoga** = c’est **Pass Cross** (ou **Pass Full**)."
-        if pk == "cross":
-            note = "\n\n📌 Pour Boxe/Yoga/Pilates sol/Core & Stretch = **Pass Focus** (ou **Pass Full**)."
-        if pk == "full":
-            note = "\n\n✅ Le plus “premium” si tu veux mixer Cross + Focus."
-        if pk == "full_former":
-            note = "\n\n✅ Si tu veux **Reformer + Cross-Former** (machines)."
-        return safe_finalize(f"**{pretty}** donne accès à 👇\n{bullets}{note}")
-
-    return safe_finalize("Je n’ai pas reconnu la formule exacte. Dis-moi : Cross / Focus / Full / Reformer / Crossformer / Full Former.")
-
-def answer_unit_price(text: str) -> str:
-    ck = extract_course_key(text)
-    if ck in ("reformer", "crossformer"):
-        return safe_finalize(f"Sans abonnement, une séance **Machine** est à **{eur(UNIT_PRICE['machine'])}**.")
-    if ck is not None:
-        return safe_finalize(f"Sans abonnement, une séance **Training / cours** est à **{eur(UNIT_PRICE['training'])}**.")
-    return safe_finalize(
-        "Sans abonnement :\n"
-        f"- Cours **Training** : **{eur(UNIT_PRICE['training'])}**\n"
-        f"- Séance **Machine** : **{eur(UNIT_PRICE['machine'])}**\n\n"
-        "Tu cherches plutôt un cours Training (Boxe/Cross/Yoga/Pilates sol…) ou une Machine (Reformer/Crossformer) ?"
-    )
 
 def answer_rules(text: str) -> str:
     t = norm2(text)
@@ -545,27 +446,44 @@ def answer_rules(text: str) -> str:
     )
 
 def answer_definition(text: str) -> Optional[str]:
-    t = norm2(text)
     ck = extract_course_key(text)
-
-    if ("difference" in t or "différence" in t) and ("reformer" in t) and ("crossformer" in t or "cross-former" in t or "cross former" in t):
-        return safe_finalize(
-            "Différence **Reformer vs Crossformer** :\n"
-            "- **Reformer** : Pilates machine plus contrôlé, super pour posture/gainage/tonus.\n"
-            "- **Crossformer** : machine plus **cardio / intense**, ça monte plus vite en rythme.\n"
-            "Les deux sont adaptés débutants : le coach ajuste."
-        )
-
-    if ck == "crossformer":
-        return safe_finalize(DEFINITIONS["crossformer"])
-    if ck == "reformer":
-        return safe_finalize(DEFINITIONS["reformer"])
     if ck and ck in DEFINITIONS:
         return safe_finalize(DEFINITIONS[ck])
     return None
 
+def answer_unit_price(text: str) -> str:
+    ck = extract_course_key(text)
+    if ck in ("reformer", "crossformer"):
+        return safe_finalize(f"Sans abonnement, une séance **Machine** est à **{eur(UNIT_PRICE['machine'])}**.")
+    return safe_finalize(f"Sans abonnement, une séance **Training / cours** est à **{eur(UNIT_PRICE['training'])}**.")
+
+def answer_pass_price(pass_key: str, sessions: int) -> Optional[str]:
+    p = PASS.get(pass_key)
+    if not p or sessions not in p.prices:
+        return None
+    total = p.prices[sessions].total
+    unit = pass_unit_price(pass_key, sessions)
+    studio_txt = STUDIOS[p.where]["label"] if p.where in STUDIOS else p.where
+    extra = ""
+    if pass_key == "kids":
+        extra = f"\n- Séance supplémentaire kids : **{eur(KIDS['extra_session'])}**"
+    return safe_finalize(
+        f"📌 **{p.label}** — {sessions} sessions / mois\n"
+        f"- Total : **{eur(total)}**\n"
+        f"- Prix / séance (calcul) : **{eur(unit)}**\n"
+        f"- Durée : {p.duration_min} min\n"
+        f"- Studio : {studio_txt}"
+        f"{extra}"
+    )
+
+def answer_ask_sessions_for_course(ck: str) -> str:
+    # question déterministe (pas Gemini)
+    if ck in ("reformer", "crossformer"):
+        return safe_finalize("Tu veux **à l’unité** ou en abonnement : **2/4/6/8/10/12 sessions** par mois ?")
+    return safe_finalize("Tu veux plutôt **2/4/6/8/10/12 sessions** par mois ? (et tu préfères Pass Cross, Focus ou Full ?)")
+
 # ------------------------------------------------------------------------------
-# PLANNING helpers
+# PLANNING
 # ------------------------------------------------------------------------------
 def slots_for(studio: Optional[str] = None, day: Optional[str] = None, course_key: Optional[str] = None) -> List[Dict[str, str]]:
     out: List[Dict[str, str]] = []
@@ -579,37 +497,10 @@ def slots_for(studio: Optional[str] = None, day: Optional[str] = None, course_ke
             nm = norm2(s.name)
             if ck == "reformer" and "reformer" not in nm:
                 continue
-            if ck == "crossformer" and ("former" not in nm):
+            if ck == "crossformer" and "former" not in nm:
                 continue
             if ck == "boxe" and "boxe" not in nm:
                 continue
-            if ck == "afrodance" and "afrodance" not in nm:
-                continue
-            if ck == "cross training" and "cross training" not in nm:
-                continue
-            if ck == "cross core" and "cross core" not in nm:
-                continue
-            if ck == "cross body" and "cross body" not in nm:
-                continue
-            if ck == "cross rox" and "cross rox" not in nm:
-                continue
-            if ck == "cross yoga" and "cross yoga" not in nm:
-                continue
-            if ck == "yoga vinyasa" and "vinyasa" not in nm:
-                continue
-            if ck == "hatha flow" and "hatha" not in nm:
-                continue
-            if ck == "classic pilates" and "classic" not in nm:
-                continue
-            if ck == "power pilates" and "power" not in nm:
-                continue
-            if ck == "core & stretch" and "stretch" not in nm:
-                continue
-            if ck == "yoga kids" and ("kids" not in nm or "yoga" not in nm):
-                continue
-            if ck == "training kids" and ("kids" not in nm or "training" not in nm):
-                continue
-
         out.append({"studio": s.studio, "day": s.day, "time": s.time, "name": s.name, "tag": s.tag})
     return out
 
@@ -633,77 +524,33 @@ def answer_planning(text: str) -> str:
     ck = extract_course_key(text) or st.session_state.profile.get("course")
 
     if ck and not studio:
-        if ck in ("reformer", "crossformer", "yoga vinyasa", "hatha flow", "classic pilates", "power pilates", "core & stretch"):
-            studio = "lavandieres"
-        else:
-            studio = "docks"
+        studio = "lavandieres" if ck in ("reformer", "crossformer", "yoga vinyasa", "hatha flow", "classic pilates", "power pilates", "core & stretch") else "docks"
 
     if studio and not ck and not day:
         found = slots_for(studio=studio)
         return safe_finalize(f"Planning **{STUDIOS[studio]['label']}** 👇\n\n{format_slots_grouped(found)}")
 
     if ck and not day:
-        found = slots_for(studio=studio, course_key=ck) if studio else slots_for(course_key=ck)
+        found = slots_for(studio=studio, course_key=ck)
         if not found:
             return safe_finalize("Je ne vois pas ce cours sur le planning actuel. Tu parles de quel studio : Docks ou Lavandières ?")
-        studio_txt = f" — {STUDIOS[studio]['label']}" if studio in STUDIOS else ""
-        course_name = found[0]["name"]
-        options = course_to_pass_options(course_name)
-        opt_txt = " / ".join(options) if options else "selon la formule"
-        return safe_finalize(
-            f"Voilà les créneaux **{ck.capitalize()}**{studio_txt} 👇\n\n"
-            f"{format_slots_grouped(found)}\n\n"
-            f"✅ Accès via : **{opt_txt}**"
-        )
+        return safe_finalize(f"Voilà les créneaux **{ck.capitalize()}** — {STUDIOS[studio]['label']} 👇\n\n{format_slots_grouped(found)}")
 
     if ck and day:
         found = slots_for(studio=studio, day=day, course_key=ck)
         if not found:
-            return safe_finalize(f"Je ne vois pas **{ck}** le **{day}** sur {STUDIOS[studio]['label']}. Tu veux que je te donne tous les jours où il y en a ?")
+            return safe_finalize(f"Je ne vois pas **{ck}** le **{day}** sur {STUDIOS[studio]['label']}. Tu veux tous les jours où il y en a ?")
         times = ", ".join([x["time"] for x in found])
-        course_name = found[0]["name"]
-        opt_txt = " / ".join(course_to_pass_options(course_name))
-        return safe_finalize(f"**{day.capitalize()}** : {ck.capitalize()} à **{times}** ({STUDIOS[studio]['label']}). ✅ {opt_txt}")
+        return safe_finalize(f"**{day.capitalize()}** : {ck.capitalize()} à **{times}** ({STUDIOS[studio]['label']}).")
 
     return safe_finalize("Dis-moi le cours + le studio (ex: “Reformer lavandières” ou “Boxe docks”) et je te donne les créneaux.")
 
-# ------------------------------------------------------------------------------
-# RECO / "RÉFLEXION" deterministic
-# ------------------------------------------------------------------------------
-def recommend_from_profile() -> str:
-    p = st.session_state.profile
-    goals = set(p.get("goals") or set())
-    studio = p.get("studio")
-
-    suggestions: List[str] = []
-    if "dos" in goals or "debutant" in goals:
-        suggestions.append("Reformer")
-    if "mobilite" in goals or "stress" in goals:
-        suggestions.append("Yoga Vinyasa")
-        suggestions.append("Core & Stretch")
-    if "cardio" in goals:
-        suggestions.append("Crossformer")
-        suggestions.append("Boxe")
-    if "tonus" in goals:
-        suggestions.append("Reformer")
-        suggestions.append("Power Pilates")
-
-    if not suggestions:
-        suggestions = ["Reformer", "Crossformer"]
-
-    suggestions = list(dict.fromkeys(suggestions))[:2]
-    studio_txt = f"Tu préfères plutôt **{STUDIOS[studio]['label']}** ou l’autre studio ?" if studio in STUDIOS else "Tu préfères plutôt **Docks** ou **Lavandières** ?"
-
-    return safe_finalize(
-        "OK 🙂 Voilà ce que je te conseillerais :\n"
-        + "\n".join([f"- **{s}**" for s in suggestions])
-        + f"\n\n{studio_txt}"
-    )
-
 # ==============================================================================
-# ROUTER DÉTERMINISTE (anti “répond à côté”)
+# ROUTER — le vrai FIX est ici : intent_sessions_only() + inference
 # ==============================================================================
 def deterministic_router(user_text: str) -> Tuple[Optional[str], bool]:
+    p = st.session_state.profile
+
     if intent_human(user_text):
         return safe_finalize("OK 🙂 Je te mets avec l’équipe."), True
 
@@ -733,34 +580,53 @@ def deterministic_router(user_text: str) -> Tuple[Optional[str], bool]:
     if intent_planning(user_text):
         return answer_planning(user_text), False
 
-    if intent_pass_info(user_text):
-        return answer_pass_info(user_text), False
+    # ✅ CAS CRITIQUE : réponse courte "4 session"
+    if intent_sessions_only(user_text):
+        n = find_sessions_count(user_text) or p.get("sessions")
+        ck = p.get("course")
+        pk = p.get("pass_key")
 
-    if intent_pass_price(user_text):
-        pk = find_pass_key(user_text) or st.session_state.profile.get("pass_key")
-        n = find_sessions_count(user_text) or st.session_state.profile.get("sessions")
+        if not pk:
+            pk = infer_pass_from_course(ck)
+
         if pk and n:
-            out = answer_pass_price(pk, n)
+            out = answer_pass_price(pk, int(n))
+            if out:
+                return out, False
+
+        # si on ne peut pas inférer
+        if ck:
+            return safe_finalize(f"OK 🙂 Pour **{ck}**, tu veux quelle formule exactement ? (Pass Reformer / Crossformer / Full Former / Full)"), False
+        return safe_finalize("OK 🙂 Tu parles de quel cours / pass ?"), False
+
+    # Prix (même si le user écrit juste "combien le reformer")
+    if intent_price(user_text):
+        ck = extract_course_key(user_text)
+        if ck and not find_sessions_count(user_text) and not intent_unit_price(user_text):
+            # on demande les sessions pour éviter Gemini
+            p["last_topic"] = "price"
+            return answer_ask_sessions_for_course(ck), False
+
+        # si on a déjà sessions + pass (ou inférence)
+        pk = find_pass_key(user_text) or p.get("pass_key")
+        n = find_sessions_count(user_text) or p.get("sessions")
+
+        if not pk:
+            pk = infer_pass_from_course(extract_course_key(user_text) or p.get("course"))
+
+        if pk and n:
+            out = answer_pass_price(pk, int(n))
             if out:
                 return out, False
 
     if intent_unit_price(user_text):
         return answer_unit_price(user_text), False
 
-    if intent_interest(user_text):
-        ck = extract_course_key(user_text)
-        if ck:
-            base = DEFINITIONS.get(ck, "OK 🙂")
-            pl = answer_planning(ck)
-            return safe_finalize(base + "\n\n" + pl + "\n\nTu préfères plutôt midi, fin d’après-midi ou soir ?"), False
-        return recommend_from_profile(), False
-
     return None, False
 
 # ==============================================================================
-# GEMINI (optionnel) — orientation seulement
+# GEMINI — ORIENTATION ONLY (et on sanitize “Bienvenue”)
 # ==============================================================================
-
 def get_api_key() -> Optional[str]:
     try:
         if "GOOGLE_API_KEY" in st.secrets:
@@ -774,79 +640,25 @@ def get_model(api_key: str):
     genai.configure(api_key=api_key)
     return genai.GenerativeModel("gemini-2.5-flash")
 
-def allowed_amounts_set() -> Set[str]:
-    allowed: Set[str] = set()
-    allowed.add(eur(UNIT_PRICE["training"]))
-    allowed.add(eur(UNIT_PRICE["machine"]))
-    allowed.add(eur(TRIAL["price"]))
-    allowed.add(eur(TRIAL["refund_if_signup"]))
-    allowed.add(eur(STARTER["price"]))
-    allowed.add(eur(BOOST["price"]))
-    allowed.add(eur(FEES_AND_ENGAGEMENT["small_group_registration_fee"]))
-    allowed.add(eur(FEES_AND_ENGAGEMENT["kids_registration_fee"]))
-    allowed.add(eur(KIDS["extra_session"]))
-
-    for p in PASS.values():
-        for pp in p.prices.values():
-            allowed.add(eur(pp.total))
-            allowed.add(eur(round(pp.total / pp.sessions, 2)))
-
-    for v in COACHING["good_vibes"]["prices"].values():
-        allowed.add(eur(v))
-    for v in COACHING["duo"]["prices"].values():
-        allowed.add(eur(v))
-    for v in COACHING["duo"]["per_person"].values():
-        allowed.add(eur(v))
-    return allowed
-
-ALLOWED_AMOUNTS = allowed_amounts_set()
-ALLOWED_TIMES = set([s.time for s in SLOTS])
-
-def extract_euro_tokens(text: str) -> List[str]:
-    tokens = re.findall(r"\b\d{1,3}(?:[ \.\,]\d{1,2})?\s?€\b", text)
-    cleaned: List[str] = []
-    for tok in tokens:
-        tok = tok.replace(" ", "")
-        m = re.match(r"^(\d{1,3})(?:[\,\.](\d{1,2}))?€$", tok)
-        if m:
-            euros = int(m.group(1))
-            cents = m.group(2) if m.group(2) else "00"
-            if len(cents) == 1:
-                cents = cents + "0"
-            cleaned.append(f"{euros},{cents}€")
-        else:
-            cleaned.append(tok)
-    return cleaned
-
-def extract_time_tokens(text: str) -> List[str]:
-    raw = re.findall(r"\b\d{1,2}(?:h|:)\d{0,2}\b", text.lower())
-    return [r.replace(":", "h") for r in raw]
-
-def violates_guardrails(text: str) -> bool:
-    for tok in extract_euro_tokens(text):
-        if tok not in ALLOWED_AMOUNTS:
-            return True
-    for tok in extract_time_tokens(text):
-        if tok in ("1h", "24h"):
-            continue
-        if tok not in ALLOWED_TIMES:
-            return True
-    return False
-
 SYSTEM_PROMPT = """
-Tu fais partie de l’équipe SVB. Tu écris comme une vraie personne (naturel, simple).
-Tu NE dis JAMAIS que tu es une IA ou un bot.
+Tu fais partie de l’équipe SVB. Style humain, simple, premium.
+Tu NE dis JAMAIS “Bienvenue chez SVB” et tu ne te présentes pas.
 
-RÈGLES ABSOLUES :
-- Tu n’inventes AUCUN prix, AUCUN horaire, AUCUNE règle.
-- Si la question contient des prix/horaires/règlement => tu poses 1 question courte OU tu proposes WhatsApp.
-- Tu peux aider à choisir (orientation) selon objectif/niveau/studio.
-- Style : doux, cocon, pro. Réponses courtes.
-
-IMPORTANT :
-- Pas de “Bienvenue chez SVB” à chaque message.
-- Pas de phrases coupées : finis toujours ta réponse par une phrase complète.
+RÈGLES :
+- Tu n’inventes aucun prix, aucun horaire, aucune règle.
+- Si l’utilisateur demande prix/horaires/règlement => 1 question courte max ou WhatsApp.
+- Finis TOUJOURS avec une phrase complète.
 """.strip()
+
+def sanitize_llm(text: str) -> str:
+    t = (text or "").strip()
+    t2 = norm2(t)
+    if t2.startswith("hello") and "bienvenue" in t2[:40]:
+        # on coupe l’accueil
+        t = re.sub(r"(?i)^hello\s*!?\s*bienvenue.*?\?\s*", "", t).strip()
+    if t2.startswith("bienvenue"):
+        t = re.sub(r"(?i)^bienvenue.*?\?\s*", "", t).strip()
+    return safe_finalize(t)
 
 def build_gemini_contents(history: List[Dict[str, str]]) -> List[Dict[str, Any]]:
     trimmed = history[-18:]
@@ -860,16 +672,12 @@ def call_gemini(api_key: str, history: List[Dict[str, str]]) -> Tuple[str, bool]
     model = get_model(api_key)
     resp = model.generate_content(
         build_gemini_contents(history),
-        generation_config={"temperature": 0.35, "top_p": 0.9, "max_output_tokens": 320},
+        generation_config={"temperature": 0.35, "top_p": 0.9, "max_output_tokens": 220},
     )
-    text = safe_finalize((resp.text or "").strip())
+    text = sanitize_llm(resp.text or "")
     if not text:
-        text = "Tu préfères plutôt Machines (Reformer/Crossformer) ou Training (Cross/Boxe/Yoga) ? 🙂"
-
-    if violates_guardrails(text):
-        return safe_finalize("Je préfère te répondre correctement : écris-nous sur WhatsApp et on te répond tout de suite 🙂"), True
-
-    needs_wa = any(k in norm2(text) for k in ["whatsapp", "equipe", "équipe", "écris-nous", "ecris-nous", "contacte"])
+        text = "Tu préfères Machines (Reformer/Crossformer) ou Training (Cross/Boxe/Yoga) ? 🙂"
+    needs_wa = "whatsapp" in norm2(text)
     return text, needs_wa
 
 # ==============================================================================
@@ -911,7 +719,7 @@ if prompt:
             wa_button()
     else:
         if not GEMINI_AVAILABLE or not api_key:
-            txt = safe_finalize("Je peux te guider 🙂 Dis-moi ton objectif (tonus, cardio, dos, mobilité) et ton studio (Docks ou Lavandières).")
+            txt = safe_finalize("Dis-moi ton objectif + ton studio (Docks ou Lavandières) et je te guide 🙂")
             with st.chat_message("assistant"):
                 st.markdown(txt)
             st.session_state.messages.append({"role": "assistant", "content": txt})
