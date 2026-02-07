@@ -1,12 +1,12 @@
 # ==============================================================================
-# SARAH — SVB CHATBOT (Streamlit + Gemini) — VERSION CORRIGÉE & FLUIDE
+# SARAH — SVB CHATBOT — VERSION "ARCHITECT" (STRUCTURE COMPLÈTE + MODIFS)
 # ==============================================================================
 #
-# OBJECTIF
-# - ZÉRO erreur sur : tarifs, règles, inscription, planning, définitions, engagements.
-# - 95% des réponses = Python (déterministe).
-# - Gemini = uniquement orientation + reformulation + questions de qualification.
-# - Suppression des guardrails excessifs qui bloquaient l'IA.
+# MODIFICATIONS APPLIQUÉES SUR LA STRUCTURE D'ORIGINE :
+# 1. PLANNING : Remplacé par les vrais horaires du site (format add_slot).
+# 2. INTENTS : "Abonnement" ne déclenche plus l'inscription (fix conflit pause).
+# 3. ACCUEIL : Phrases d'ouverture chaleureuses et ouvertes.
+# 4. GEMINI : Suppression des blocages techniques (guardrails) pour fluidité.
 #
 # ==============================================================================
 
@@ -166,9 +166,6 @@ BOOST = {
         "1 essai gratuit / mois pour un proche (sous réserve de dispo)",
         "Suspension abonnement sans préavis",
     ],
-    # La brochure mentionne aussi “engagement 2 mois (coachings) & 3 mois (small groups)”
-    # mais elle mentionne en bas “engagement 6 mois pour les pass small groups”.
-    # => On ne tranche pas si question trop précise : escalade WhatsApp.
     "engagement_note": "Des conditions d’engagement peuvent s’appliquer selon la formule.",
 }
 
@@ -356,6 +353,11 @@ RULES = {
         "En cas d’oubli : achat à 10€ ou prêt à 3€ (10€ supplémentaires facturés si pas rendu)."
     ),
     "late_policy": "+ de 5 minutes de retard = cours refusé.",
+    "suspension_policy": (
+        "Mettre en pause l'abonnement :\n"
+        "1. Avec l'Option Boost : Suspension libre, sans préavis et sans justificatif.\n"
+        "2. Sans Option Boost : Suspension possible uniquement si absence > 10 jours et préavis d'1 mois."
+    )
 }
 
 PARRAINAGE = (
@@ -364,8 +366,8 @@ PARRAINAGE = (
 )
 
 # ==============================================================================
-# 9) PLANNING (BROCHURES — planners)
-#    On encode chaque cours : studio, jour, heure, nom, catégorie (pour quel pass)
+# 9) PLANNING (REEL - DATA SITE WEB)
+#    Structure "add_slot" restaurée mais remplie avec les vraies données.
 # ==============================================================================
 
 DAY_ORDER = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
@@ -391,7 +393,7 @@ SLOTS: List[ClassSlot] = []
 def add_slot(studio: str, day: str, time: str, name: str, tag: str) -> None:
     SLOTS.append(ClassSlot(studio=studio, day=day, time=t(time), name=name, tag=tag))
 
-# ---- DOCKS (Planner Parc des Docks) ----
+# ---- DOCKS (DONNÉES RÉELLES) ----
 add_slot("docks", "lundi", "12h", "Cross Training", "cross")
 add_slot("docks", "lundi", "13h", "Cross Core", "cross")
 add_slot("docks", "lundi", "19h", "Cross Training", "cross")
@@ -406,73 +408,73 @@ add_slot("docks", "mercredi", "16h", "Yoga Kids", "kids")
 add_slot("docks", "mercredi", "19h", "Cross Training", "cross")
 add_slot("docks", "mercredi", "20h", "Boxe", "focus")
 
-add_slot("docks", "jeudi", "8h", "Cross Core", "cross")
+add_slot("docks", "jeudi", "08h", "Cross Core", "cross")
 add_slot("docks", "jeudi", "12h", "Cross Body", "cross")
 add_slot("docks", "jeudi", "13h", "Boxe", "focus")
 add_slot("docks", "jeudi", "18h", "Cross Training", "cross")
-add_slot("docks", "jeudi", "19h", "Afrodance'All", "focus")
+add_slot("docks", "jeudi", "19h", "Afrodance", "focus")
 
 add_slot("docks", "vendredi", "18h", "Cross Rox", "cross")
 add_slot("docks", "vendredi", "19h", "Cross Training", "cross")
 
-add_slot("docks", "samedi", "9h30", "Training Kids", "kids")
+add_slot("docks", "samedi", "09h30", "Training Kids", "kids")
 add_slot("docks", "samedi", "10h30", "Cross Body", "cross")
 add_slot("docks", "samedi", "11h30", "Cross Training", "cross")
 
 add_slot("docks", "dimanche", "10h30", "Cross Training", "cross")
 add_slot("docks", "dimanche", "11h30", "Cross Yoga", "cross")
 
-# ---- LAVANDIÈRES (Planner Cours Lavandières) ----
-add_slot("lavandieres", "lundi", "12h", "Cross-Former", "crossformer")
+# ---- LAVANDIÈRES (DONNÉES RÉELLES) ----
+add_slot("lavandieres", "lundi", "12h", "Crossformer", "crossformer")
 add_slot("lavandieres", "lundi", "12h15", "Reformer", "reformer")
 add_slot("lavandieres", "lundi", "12h30", "Yoga Vinyasa", "focus")
-add_slot("lavandieres", "lundi", "18h45", "Cross-Former", "crossformer")
+add_slot("lavandieres", "lundi", "18h45", "Crossformer", "crossformer")
 add_slot("lavandieres", "lundi", "19h", "Yoga Vinyasa", "focus")
 add_slot("lavandieres", "lundi", "19h15", "Reformer", "reformer")
 
-add_slot("lavandieres", "mardi", "7h30", "Hatha Flow", "focus")
-add_slot("lavandieres", "mardi", "11h45", "Cross-Former", "crossformer")
+add_slot("lavandieres", "mardi", "07h30", "Hatha Flow", "focus")
+add_slot("lavandieres", "mardi", "11h45", "Crossformer", "crossformer")
 add_slot("lavandieres", "mardi", "12h", "Power Pilates", "focus")
 add_slot("lavandieres", "mardi", "13h15", "Reformer", "reformer")
-add_slot("lavandieres", "mardi", "18h45", "Cross-Former", "crossformer")
+add_slot("lavandieres", "mardi", "18h45", "Crossformer", "crossformer")
 add_slot("lavandieres", "mardi", "19h15", "Reformer", "reformer")
 add_slot("lavandieres", "mardi", "20h", "Power Pilates", "focus")
 
-add_slot("lavandieres", "mercredi", "10h15", "Cross-Former", "crossformer")
+add_slot("lavandieres", "mercredi", "10h15", "Crossformer", "crossformer")
 add_slot("lavandieres", "mercredi", "12h", "Reformer", "reformer")
-add_slot("lavandieres", "mercredi", "12h15", "Cross-Former", "crossformer")
+add_slot("lavandieres", "mercredi", "12h15", "Crossformer", "crossformer")
 add_slot("lavandieres", "mercredi", "19h", "Reformer", "reformer")
-add_slot("lavandieres", "mercredi", "19h15", "Cross-Former", "crossformer")
+add_slot("lavandieres", "mercredi", "19h15", "Crossformer", "crossformer")
 add_slot("lavandieres", "mercredi", "20h", "Reformer", "reformer")
 
-add_slot("lavandieres", "jeudi", "7h", "Classic Pilates", "focus")
+add_slot("lavandieres", "jeudi", "07h", "Classic Pilates", "focus")
 add_slot("lavandieres", "jeudi", "12h", "Yoga Vinyasa", "focus")
-add_slot("lavandieres", "jeudi", "12h15", "Cross-Former", "crossformer")
+add_slot("lavandieres", "jeudi", "12h15", "Crossformer", "crossformer")
 add_slot("lavandieres", "jeudi", "12h30", "Reformer", "reformer")
-add_slot("lavandieres", "jeudi", "18h", "Cross-Former", "crossformer")
+add_slot("lavandieres", "jeudi", "18h", "Crossformer", "crossformer")
 add_slot("lavandieres", "jeudi", "18h45", "Reformer", "reformer")
 add_slot("lavandieres", "jeudi", "19h15", "Power Pilates", "focus")
 add_slot("lavandieres", "jeudi", "20h15", "Cross Yoga", "cross")
-add_slot("lavandieres", "jeudi", "20h30", "Cross-Former", "crossformer")  # libellé "Cross Forme" sur flyer
+add_slot("lavandieres", "jeudi", "20h30", "Cross Forme", "crossformer")
 
-add_slot("lavandieres", "vendredi", "9h45", "Cross-Former", "crossformer")
-add_slot("lavandieres", "vendredi", "10h45", "Cross-Former", "crossformer")
+add_slot("lavandieres", "vendredi", "09h45", "Crossformer", "crossformer")
+add_slot("lavandieres", "vendredi", "10h45", "Crossformer", "crossformer")
 add_slot("lavandieres", "vendredi", "12h", "Reformer", "reformer")
 add_slot("lavandieres", "vendredi", "13h", "Reformer", "reformer")
 add_slot("lavandieres", "vendredi", "18h", "Classic Pilates", "focus")
 add_slot("lavandieres", "vendredi", "18h30", "Reformer", "reformer")
-add_slot("lavandieres", "vendredi", "19h15", "Cross-Former", "crossformer")
+add_slot("lavandieres", "vendredi", "19h15", "Crossformer", "crossformer")
 
-add_slot("lavandieres", "samedi", "8h45", "Reformer", "reformer")
-add_slot("lavandieres", "samedi", "9h", "Cross-Former", "crossformer")
-add_slot("lavandieres", "samedi", "9h45", "Reformer", "reformer")
+add_slot("lavandieres", "samedi", "09h", "Reformer", "reformer")
+add_slot("lavandieres", "samedi", "09h30", "Crossformer", "crossformer")
+add_slot("lavandieres", "samedi", "10h", "Reformer", "reformer")
 add_slot("lavandieres", "samedi", "10h15", "Classic Pilates", "focus")
+add_slot("lavandieres", "samedi", "10h30", "Crossformer", "crossformer")
 add_slot("lavandieres", "samedi", "11h15", "Core & Stretch", "focus")
-add_slot("lavandieres", "samedi", "11h30", "Cross-Former", "crossformer")
 
-add_slot("lavandieres", "dimanche", "10h", "Cross-Former", "crossformer")
+add_slot("lavandieres", "dimanche", "10h", "Crossformer", "crossformer")
 add_slot("lavandieres", "dimanche", "10h15", "Reformer", "reformer")
-add_slot("lavandieres", "dimanche", "11h", "Cross-Former", "crossformer")
+add_slot("lavandieres", "dimanche", "11h", "Crossformer", "crossformer")
 add_slot("lavandieres", "dimanche", "11h15", "Reformer", "reformer")
 add_slot("lavandieres", "dimanche", "11h30", "Yoga Vinyasa", "focus")
 
@@ -673,7 +675,7 @@ def tag_to_pass_hint(tag: str) -> str:
     return mapping.get(tag, "selon la formule")
 
 # ==============================================================================
-# 12) INTENTS — DÉTECTION (TRÈS LARGE)
+# 12) INTENTS — DÉTECTION (AMELIOREE)
 # ==============================================================================
 
 def has_any(text: str, words: List[str]) -> bool:
@@ -687,14 +689,20 @@ def intent_human(text: str) -> bool:
         "parler a", "parler à", "urgent", "stp appelle", "je veux parler"
     ])
 
+def intent_suspension(text: str) -> bool:
+    # PRIORITAIRE : Mots clés de pause
+    return has_any(text, ["pause", "suspendre", "suspension", "arret", "arrêt", "vacance"])
+
 def intent_signup(text: str) -> bool:
-    # Must explicitely mention signup actions (removed "abonnement" alone)
-    signup_keywords = ["m'inscrire", "inscrire", "inscription", "s'inscrire", "creer un compte", "créer un compte", "nouvel adherent", "nouveau membre"]
+    # RESTRICTIF : Il faut une action d'inscription explicite
+    # Le mot "abonnement" seul ne suffit plus.
+    signup_keywords = [
+        "m'inscrire", "inscrire", "inscription", "s'inscrire", 
+        "creer un compte", "créer un compte", "nouvel adherent", "nouveau membre",
+        "comment on s'abonne", "je veux m'abonner"
+    ]
     app_keywords = ["identifiant", "mot de passe", "connexion", "connecter", "pas reçu mail", "pas recu mail"]
     return has_any(text, signup_keywords + app_keywords)
-
-def intent_suspension(text: str) -> bool:
-    return has_any(text, ["pause", "suspendre", "suspension", "arret", "arrêt", "vacance"])
 
 def intent_trial(text: str) -> bool:
     return has_any(text, ["essai", "seance d'essai", "séance d'essai", "tester", "découverte", "decouverte"])
@@ -772,15 +780,14 @@ def answer_suspension() -> str:
     )
 
 def answer_signup() -> str:
-    # validé par toi
     return (
-        "Pour t’inscrire :\n\n"
+        "📝 **Procédure d'inscription** :\n\n"
         "1) Tu souscris ton abonnement en ligne.\n"
         "2) Après le paiement, tu reçois automatiquement un e-mail avec tes identifiants.\n"
         "3) Tu télécharges l’application (SVB / Sportigo).\n"
         "4) Tu rentres les identifiants reçus par e-mail dans l’application.\n"
         "5) Ensuite tu réserves tes séances sur le planning ✅\n\n"
-        "Si tu ne reçois pas l’e-mail (spam / délai), écris-nous sur WhatsApp."
+        "⚠️ *Si tu ne reçois pas l’e-mail (spam / délai), écris-nous sur WhatsApp.*"
     )
 
 def answer_trial() -> str:
@@ -898,8 +905,9 @@ def answer_rules(text: str) -> str:
     if any(k in t for k in ["resiliation", "résiliation", "preavis", "préavis", "modifier", "modification"]):
         return RULES["resiliation"]
 
-    if any(k in t for k in ["suspension", "absence", "absent"]):
-        return RULES["suspension_absence"]
+    if any(k in t for k in ["suspension", "absence", "absent", "pause"]):
+        # Ici on peut aussi renvoyer vers la réponse suspension si c'est spécifique
+        return RULES["suspension_policy"]
 
     if any(k in t for k in ["retard"]):
         return RULES["late_policy"]
@@ -1128,7 +1136,7 @@ def deterministic_router(user_text: str) -> Tuple[Optional[str], bool]:
     if intent_human(user_text):
         return human_alert("OK 🙂 je te mets avec l’équipe." )
 
-    # 1) Suspension (AVANT l'inscription)
+    # 1) Suspension (Prioritaire sur inscription)
     if intent_suspension(user_text):
         return answer_suspension(), False
 
@@ -1273,9 +1281,9 @@ def call_gemini(api_key: str, history: List[Dict[str, str]]) -> Tuple[str, bool]
 
 def first_message() -> str:
     variants = [
-        "Salut 🙂 Tu cherches plutôt Machines (Reformer/Crossformer) ou Training (Cross/Boxe/Yoga) ?",
-        "Hello 🙂 Dis-moi ce que tu veux travailler (tonus, cardio, mobilité…) et je te guide.",
-        "OK 🙂 Tu veux plutôt réserver aux Docks ou aux Lavandières ?",
+        "Bonjour ! Je suis Sarah, l'assistante du studio SVB. Comment puis-je t'aider aujourd'hui ?",
+        "Hello ! Bienvenue chez SVB. Tu as une question sur le planning, les tarifs ou nos cours ?",
+        "Salut 🙂 Je suis là pour te renseigner sur le studio. Dis-moi ce que tu recherches !"
     ]
     return random.choice(variants)
 
