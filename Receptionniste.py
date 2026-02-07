@@ -1,5 +1,5 @@
 # ==============================================================================
-# SARAH — SVB CHATBOT — VERSION ULTIME (PRIX INTELLIGENTS & SOUPLES)
+# SARAH — SVB CHATBOT — VERSION ULTIME (INTELLIGENTE & ROBUSTE)
 # ==============================================================================
 
 import os
@@ -180,7 +180,7 @@ def find_sessions(text: str) -> Optional[int]:
 
 def find_pass_key(text: str) -> Optional[str]:
     t = norm(text)
-    mapping = [("full former", "full_former"), ("fullformer", "full_former"), ("crossformer", "crossformer"), ("reformer", "reformer"), ("cross", "cross"), ("focus", "focus"), ("full", "full"), ("kids", "kids"), ("enfant", "kids"), ("pilate", "reformer")]
+    mapping = [("full former", "full_former"), ("fullformer", "full_former"), ("crossformer", "crossformer"), ("reformer", "reformer"), ("cross", "cross"), ("focus", "focus"), ("full", "full"), ("kids", "kids"), ("enfant", "kids")]
     for k_txt, k_key in mapping:
         if k_txt in t: return k_key
     return None
@@ -349,22 +349,12 @@ def get_price_response(text: str) -> str:
     if "boost" in t: return f"⚡ **Option Boost** : {eur(BOOST['price'])}/mois."
     if "unit" in t or "sans abo" in t: return f"Unité : Training **{eur(UNIT_PRICE['training'])}**, Machine **{eur(UNIT_PRICE['machine'])}**."
 
-    # Pass prices (CORRECTION MAJEURE ICI)
+    # Pass prices
     pk = find_pass_key(text)
     n = find_sessions(text)
-    
-    # 1. On a le pass ET le nombre de séances
     if pk and n:
         if n in PASS[pk].prices:
             return f"📌 **{PASS[pk].label} {n} sessions** : **{eur(PASS[pk].prices[n].total)}** / mois."
-    
-    # 2. On a le pass MAIS PAS le nombre de séances -> ON AFFICHE TOUT
-    elif pk:
-        p_conf = PASS[pk]
-        lines = [f"Voici les tarifs pour le **{p_conf.label}** :"]
-        for sess, price_obj in p_conf.prices.items():
-            lines.append(f"- {sess} sessions : **{eur(price_obj.total)}**")
-        return "\n".join(lines)
             
     return "Je n'ai pas compris quel tarif tu cherches. Peux-tu préciser (ex: 'Pass Cross 4 sessions') ?"
 
