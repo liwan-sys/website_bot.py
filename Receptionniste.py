@@ -20,7 +20,6 @@ st.title("Sarah - SVB 🧡")
 
 # ==============================================================================
 # 2. LE CERVEAU (MANUEL DU STUDIO)
-# C'EST ICI QUE TOUT EST ANTICIPÉ. L'IA LIT ÇA AVANT DE RÉPONDRE.
 # ==============================================================================
 
 SYSTEM_INSTRUCTIONS = """
@@ -115,25 +114,14 @@ DIMANCHE :
 - Docks : 10h30 Cross Training, 11h30 Cross Yoga.
 - Lavandières : 10h/11h Crossformer, 10h15/11h15 Reformer, 11h30 Yoga.
 
---- 🛡️ FAQ & RÈGLEMENT (ANTICIPATION DES PROBLÈMES) ---
-- RETARD : "Tolérance 5 minutes max. Après, porte fermée pour sécurité."
+--- 🛡️ FAQ & RÈGLEMENT ---
+- RETARD : "Tolérance 5 minutes max."
 - TENUE : "Baskets propres aux Docks. Chaussettes antidérapantes OBLIGATOIRES aux Lavandières."
-- DOUCHES : "Oui, douches individuelles, casiers et sèche-cheveux dispos partout."
-- PARKING : "Lavandières = Parking en face. Docks = Difficile, visez le parking Mairie."
-- ENCEINTE : "OK pour Reformer/Yoga (avec avis médical). INTERDIT pour Cross/Boxe/Crossformer."
-- BLESSURE : "Préviens le coach AVANT le cours, il adaptera."
-- PAIEMENT : "CB sur l'appli ou sur place. Pas de chèques vacances."
-- RÉSERVATION : "Tout se fait sur l'application SVB ou Sportigo."
-- ANNULATION : "1h avant pour les cours collectifs, sinon décompté."
-
---- EXEMPLES DE RÉPONSES ---
-User: "C'est quoi le pric du pialte ?"
-Sarah: "Tu parles du Pilates Machine (Reformer) ou au Sol (Mat) ?
-- Le Pass Reformer (Machine) est à 136,30€ pour 4 séances.
-- Le Pass Focus (Sol) est à 72,30€ pour 4 séances."
-
-User: "Je peux me garer ?"
-Sarah: "Aux Lavandières, il y a un parking public en face. Aux Docks, c'est plus dur, je te conseille le parking de la Mairie !"
+- DOUCHES : "Oui, douches individuelles dispos."
+- PARKING : "Lavandières = Parking en face. Docks = Mairie."
+- ENCEINTE : "OK pour Reformer/Yoga. INTERDIT pour Cross/Boxe."
+- BLESSURE : "Préviens le coach AVANT le cours."
+- PAIEMENT : "CB sur l'appli ou sur place."
 """
 
 # ==============================================================================
@@ -145,69 +133,80 @@ def get_ai_response(user_message, history):
     try:
         api_key = st.secrets["GOOGLE_API_KEY"]
     except:
-        # Fallback si pas de fichier secrets (pour tester en local avec variable d'env)
         api_key = os.getenv("GOOGLE_API_KEY")
     
     if not api_key:
-        return "⚠️ **Erreur Technique** : Je n'ai pas trouvé ma clé API. Dis à mon créateur de vérifier le fichier `secrets.toml` !"
+        return "⚠️ **Erreur Technique** : Clé API introuvable. Vérifie le fichier secrets.toml !"
 
-    # 2. Configuration Gemini
+    # 2. Configuration Gemini (MODIFIÉ ICI : gemini-pro au lieu de gemini-1.5-flash)
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash") # Modèle rapide et intelligent
+    
+    # On utilise "gemini-pro" qui est le modèle le plus stable et disponible partout
+    try:
+        model = genai.GenerativeModel("gemini-pro") 
+    except:
+        return "Erreur modèle : Impossible de charger Gemini."
 
     # 3. Construction de la conversation
-    # On injecte le SYSTEM_INSTRUCTIONS au début pour lui donner sa personnalité
-    chat_session = model.start_chat(
-        history=[
-            {"role": "user", "parts": [SYSTEM_INSTRUCTIONS]},
-            {"role": "model", "parts": ["Compris. Je suis Sarah, l'assistante SVB. Je connais le planning, les prix et les règles par cœur. Je suis prête."]}
-        ]
-    )
-
-    # 4. Ajout de l'historique récent (pour qu'elle se souvienne de la discussion)
-    for msg in history:
-        role = "user" if msg["role"] == "user" else "model"
-        chat_session.history.append({"role": role, "parts": [msg["content"]]})
-
-    # 5. Envoi de la question
+    # Pour gemini-pro, l'historique doit être simple
+    messages = []
+    
+    # On donne le contexte via le premier message user (astuce pour gemini-pro)
+    context_prompt = SYSTEM_INSTRUCTIONS + "\n\nMaintenant, réponds à l'utilisateur :"
+    
+    # On recrée un chat session
+    chat = model.start_chat(history=[])
+    
+    # On envoie d'abord le contexte système (caché pour l'utilisateur dans l'interface, mais vu par l'IA)
     try:
-        response = chat_session.send_message(user_message)
+        chat.send_message(context_prompt)
+    except:
+        pass
+
+    # On rejoue l'historique pour qu'il ait la mémoire
+    for msg in history:
+        try:
+            if msg["role"] == "user":
+                chat.send_message(msg["content"])
+            else:
+                # Gemini Pro ne permet pas facilement d'insérer des réponses modèle manuellement dans l'historique via l'API simple
+                # On ignore l'historique modèle pour simplifier et éviter les erreurs 400
+                pass 
+        except:
+            pass
+
+    # 4. Envoi de la question actuelle
+    try:
+        response = chat.send_message(user_message)
         return response.text
     except Exception as e:
-        return f"Oups, j'ai eu un petit bug de connexion ({e}). Tu peux répéter ?"
+        return f"Oups, petite erreur de connexion ({e}). Réessaie !"
 
 # ==============================================================================
-# 4. INTERFACE UTILISATEUR (CHATBOT)
+# 4. INTERFACE UTILISATEUR
 # ==============================================================================
 
-# Initialisation
 if "messages" not in st.session_state:
     st.session_state.messages = [{
         "role": "assistant", 
         "content": "Bonjour ! Je suis Sarah. Planning, Tarifs, Conseils... Je t'écoute ! 🙂"
     }]
 
-# Affichage des messages précédents
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# Zone de saisie
-if prompt := st.chat_input("Pose ta question... (ex: Prix Reformer, Parking, Tenue...)"):
-    # 1. Afficher le message utilisateur
+if prompt := st.chat_input("Pose ta question... (ex: Prix Reformer, Parking...)"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # 2. Générer la réponse IA
     with st.chat_message("assistant"):
         with st.spinner("Sarah réfléchit..."):
             ai_reply = get_ai_response(prompt, st.session_state.messages[:-1])
             st.markdown(ai_reply)
+            
+            if "whatsapp" in ai_reply.lower():
+                st.link_button("📞 Contacter l'équipe", "https://wa.me/33744919155")
 
-            # Petit bonus : Bouton WhatsApp si l'IA sent que c'est nécessaire
-            if "whatsapp" in ai_reply.lower() or "équipe" in ai_reply.lower():
-                st.link_button("📞 Contacter l'équipe sur WhatsApp", "https://wa.me/33744919155")
-
-    # 3. Sauvegarder la réponse
     st.session_state.messages.append({"role": "assistant", "content": ai_reply})
