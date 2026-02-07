@@ -2,16 +2,20 @@ import streamlit as st
 import google.generativeai as genai
 import os
 
-# ON IMPORTE TES DONNÉES DEPUIS L'AUTRE FICHIER
-# (Assure-toi que donnees_studio.py est bien dans le même dossier !)
+# ==============================================================================
+# 1. CHARGEMENT DES DONNÉES (CERVEAU)
+# ==============================================================================
 try:
+    # On essaie d'importer le fichier que tu as créé à l'étape 1
     from donnees_studio import CONTEXTE_COMPLET
 except ImportError:
-    st.error("⚠️ Je ne trouve pas le fichier 'donnees_studio.py'. Vérifie qu'il est bien créé à côté de ce fichier.")
+    # Si ça rate, on met un message d'erreur clair
+    st.error("⚠️ ERREUR : Le fichier 'donnees_studio.py' est introuvable !")
+    st.warning("Assure-toi d'avoir créé le fichier 'donnees_studio.py' dans le même dossier que celui-ci.")
     st.stop()
 
 # ==============================================================================
-# 1. CONFIGURATION
+# 2. CONFIGURATION & STYLE
 # ==============================================================================
 st.set_page_config(page_title="Sarah - SVB", page_icon="🧡")
 
@@ -26,21 +30,8 @@ h1 { color: #8FB592; text-align: center; font-family: cursive; }
 st.title("Sarah - SVB 🧡")
 
 # ==============================================================================
-# 2. INTELLIGENCE ARTIFICIELLE
+# 3. INTELLIGENCE ARTIFICIELLE (MODE COMPATIBLE)
 # ==============================================================================
-
-def get_smart_model(api_key):
-    """Trouve le meilleur modèle disponible sur ton ordi."""
-    genai.configure(api_key=api_key)
-    # On teste les modèles du plus récent au plus vieux
-    candidates = ["gemini-1.5-flash", "gemini-pro", "gemini-1.0-pro"]
-    for model_name in candidates:
-        try:
-            model = genai.GenerativeModel(model_name)
-            return model
-        except:
-            continue
-    return genai.GenerativeModel("gemini-pro") # Fallback
 
 def ask_sarah(user_message, history):
     # 1. Récupération Clé API
@@ -50,33 +41,37 @@ def ask_sarah(user_message, history):
         api_key = os.getenv("GOOGLE_API_KEY")
     
     if not api_key:
-        return "⚠️ Erreur : Clé API introuvable dans .streamlit/secrets.toml"
+        return "⚠️ Erreur : Je ne trouve pas la clé API dans le dossier .streamlit/secrets.toml"
 
-    # 2. Chargement du Cerveau
-    try:
-        model = get_smart_model(api_key)
-    except Exception as e:
-        return f"Erreur technique : {e}"
-
-    # 3. Construction du contexte pour l'IA
-    # On lui donne TOUT le contenu de donnees_studio.py
-    full_prompt = CONTEXTE_COMPLET + "\n\n--- CONVERSATION ---\n"
+    # 2. Configuration & Connexion
+    genai.configure(api_key=api_key)
     
-    for msg in history:
-        role = "CLIENT" if msg["role"] == "user" else "SARAH"
-        full_prompt += f"{role}: {msg['content']}\n"
-    
-    full_prompt += f"CLIENT: {user_message}\nSARAH:"
-
-    # 4. Génération
     try:
+        # ICI : ON FORCE LE MODÈLE "gemini-pro" (LE PLUS STABLE)
+        # On n'utilise pas "flash" pour éviter ton erreur 404
+        model = genai.GenerativeModel("gemini-pro")
+        
+        # 3. Construction du message pour l'IA
+        # On combine tes données (donnees_studio) + la conversation
+        full_prompt = CONTEXTE_COMPLET + "\n\n--- HISTORIQUE DE CONVERSATION ---\n"
+        
+        # On ajoute l'historique pour qu'elle ait de la mémoire
+        for msg in history:
+            role = "CLIENT" if msg["role"] == "user" else "SARAH"
+            full_prompt += f"{role}: {msg['content']}\n"
+        
+        # On ajoute la question actuelle
+        full_prompt += f"CLIENT: {user_message}\nSARAH:"
+
+        # 4. Envoi
         response = model.generate_content(full_prompt)
         return response.text
+
     except Exception as e:
-        return f"Désolée, je réfléchis trop... (Erreur: {e})"
+        return f"Oups, petite erreur technique : {e}"
 
 # ==============================================================================
-# 3. INTERFACE DE CHAT
+# 4. INTERFACE DE CHAT
 # ==============================================================================
 
 if "messages" not in st.session_state:
@@ -101,7 +96,7 @@ if prompt := st.chat_input("Pose ta question..."):
             ai_reply = ask_sarah(prompt, st.session_state.messages[:-1])
             st.markdown(ai_reply)
             
-            # Petit bouton WhatsApp intelligent
+            # Bouton WhatsApp intelligent
             if "whatsapp" in ai_reply.lower() or "équipe" in ai_reply.lower():
                 st.link_button("📞 Contacter l'équipe", "https://wa.me/33744919155")
 
