@@ -122,14 +122,37 @@ def get_current_day() -> str:
 def detect_pass_info(text: str) -> Tuple[Optional[str], Optional[int]]:
     t = normalize(text)
     pass_key = None
-    # Détection souple (y compris "pilate" ou "pialte" pour reformer)
-    if "crossformer" in t: pass_key = "crossformer"
-    elif "reformer" in t or "pilate" in t or "pialte" in t: pass_key = "reformer"
-    elif "full" in t: pass_key = "full" if "former" not in t else "full_former"
-    elif "focus" in t: pass_key = "focus"
-    elif "cross" in t: pass_key = "cross"
-    elif "kid" in t or "enfant" in t: pass_key = "kids"
     
+    # 1. DÉTECTION PASS (ORDRE D'IMPORTANCE)
+    
+    # Si on parle explicitement de SOL / MAT -> C'est le PASS FOCUS
+    if "sol" in t or "mat" in t: 
+        pass_key = "focus"
+        
+    # Sinon, on vérifie les machines
+    elif "crossformer" in t: 
+        pass_key = "crossformer"
+    elif "reformer" in t: 
+        pass_key = "reformer"
+        
+    # Sinon, on vérifie le mot "pilate" générique
+    # Si "pilate" est seul (sans "sol"), on assume souvent Reformer, 
+    # MAIS on peut aussi renvoyer vers Focus si le contexte est "yoga/pilates".
+    # Ici, on garde la priorité Reformer SAUF si "sol" a été détecté plus haut.
+    elif "pilate" in t or "pialte" in t:
+        pass_key = "reformer" if not pass_key else pass_key
+
+    # Autres pass
+    elif "full" in t: 
+        pass_key = "full" if "former" not in t else "full_former"
+    elif "focus" in t: 
+        pass_key = "focus"
+    elif "cross" in t: 
+        pass_key = "cross"
+    elif "kid" in t or "enfant" in t: 
+        pass_key = "kids"
+    
+    # 2. DÉTECTION NOMBRE SÉANCES
     sessions = None
     match = re.search(r"\b(2|4|6|8|10|12)\b", t)
     if match: sessions = int(match.group(1))
