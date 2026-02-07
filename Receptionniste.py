@@ -1,5 +1,5 @@
 # ==============================================================================
-# SARAH — SVB CHATBOT — VERSION FINALE (FIX AFFICHAGE TEXTE NOIR)
+# SARAH — SVB CHATBOT — VERSION ULTIME (INTELLIGENTE & ROBUSTE)
 # ==============================================================================
 
 import os
@@ -29,75 +29,59 @@ except ImportError:
 st.set_page_config(page_title="Sarah - SVB", page_icon="🧡", layout="centered")
 
 # ------------------------------------------------------------------------------
-# 2) CSS (CORRECTION COULEUR TEXTE)
+# 2) CSS (DESIGN & VISIBILITÉ)
 # ------------------------------------------------------------------------------
 st.markdown(
     """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Lato:wght@400;700&display=swap');
 
-/* Fond général de l'application */
-.stApp {
+.stApp{
   background: linear-gradient(180deg, #F9F7F2 0%, #E6F0E6 100%);
-  font-family: 'Lato', sans-serif;
-  color: #000000 !important; /* Force le texte général en noir */
+  font-family:'Lato',sans-serif;
+  color:#000000 !important;
 }
+#MainMenu, footer, header {visibility:hidden;}
 
-#MainMenu, footer, header {visibility: hidden;}
-
-/* Titre Sarah */
-h1 {
-  font-family: 'Dancing Script', cursive;
-  color: #8FB592;
-  text-align: center;
-  font-size: 3.4rem !important;
-  margin-bottom: 0px !important;
-  text-shadow: 2px 2px 4px rgba(0,0,0,0.10);
+h1{
+  font-family:'Dancing Script',cursive;
+  color:#8FB592;
+  text-align:center;
+  font-size:3.4rem !important;
+  margin-bottom:0px !important;
+  text-shadow:2px 2px 4px rgba(0,0,0,0.10);
 }
-
-.subtitle {
-  text-align: center;
-  color: #EBC6A6;
-  font-size: 1.0rem;
-  font-weight: 700;
-  margin-bottom: 18px;
-  text-transform: uppercase;
-  letter-spacing: 2px;
+.subtitle{
+  text-align:center;
+  color:#EBC6A6;
+  font-size:1.0rem;
+  font-weight:700;
+  margin-bottom:18px;
+  text-transform:uppercase;
+  letter-spacing:2px;
 }
-
-/* --- CORRECTION BULLES DE CHAT --- */
-.stChatMessage {
-  background-color: #ffffff !important; /* Fond BLANC */
+.stChatMessage{
+  background-color: #ffffff !important;
   border: 1px solid #EBC6A6;
   border-radius: 15px;
   padding: 14px;
   box-shadow: 0 4px 6px rgba(0,0,0,0.05);
 }
-
-/* Force TOUS les textes dans les bulles en NOIR */
-.stChatMessage p, 
-.stChatMessage div, 
-.stChatMessage span, 
-.stChatMessage li,
-.stChatMessage h1, 
-.stChatMessage h2, 
-.stChatMessage h3 {
+.stChatMessage p, .stChatMessage div, .stChatMessage span, .stChatMessage li {
   color: #000000 !important;
   line-height: 1.6;
 }
-
-/* Boutons */
-.stButton button {
+.stButton button{
   background: linear-gradient(90deg, #25D366 0%, #128C7E 100%);
-  color: white !important;
-  border: none;
-  border-radius: 25px;
-  padding: 12px 25px;
-  font-weight: 800;
-  width: 100%;
-  text-transform: uppercase;
+  color:white !important;
+  border:none;
+  border-radius:25px;
+  padding:12px 25px;
+  font-weight:800;
+  width:100%;
+  text-transform:uppercase;
 }
-.stButton button:hover { transform: scale(1.02); }
+.stButton button:hover{ transform: scale(1.02); }
 </style>
 """,
     unsafe_allow_html=True,
@@ -157,7 +141,7 @@ add_pass(PassConfig("focus", "Pass Focus", 55, {2: PassPrice(2, 36.30), 4: PassP
 add_pass(PassConfig("full", "Pass Full", 55, {2: PassPrice(2, 40.30), 4: PassPrice(4, 80.30), 6: PassPrice(6, 115.30), 8: PassPrice(8, 150.30), 10: PassPrice(10, 180.30), 12: PassPrice(12, 210.30)}, "mixte"))
 add_pass(PassConfig("kids", "Pass Kids", 55, {2: PassPrice(2, 35.30), 4: PassPrice(4, 65.30)}, "docks"))
 
-# --- PLANNING RÉEL (EXTRAIT DU SITE STUDIOSVB.COM) ---
+# --- PLANNING RÉEL ---
 PLANNING_DATA = {
     "docks": {
         "lundi": [("12h", "Cross Training", "cross"), ("13h", "Cross Core", "cross"), ("19h", "Cross Training", "cross"), ("20h", "Cross Body", "cross")],
@@ -309,7 +293,6 @@ def get_planning_response(text: str) -> str:
     day = detect_day(text)
     course_key = extract_course_key(text)
     
-    # 1. Deviner le studio via le cours si non précisé
     if not studio and course_key:
         if course_key in ["reformer", "crossformer", "yoga vinyasa", "hatha flow", "classic pilates", "power pilates", "core & stretch"]:
             studio = "lavandieres"
@@ -327,7 +310,6 @@ def get_planning_response(text: str) -> str:
     found_any = False
     for d in days_to_show:
         slots = studio_slots.get(d, [])
-        # Filtre par cours si demandé
         if course_key:
             slots = [s for s in slots if course_key in norm(s[1])]
             
@@ -342,6 +324,14 @@ def get_planning_response(text: str) -> str:
         return f"Je n'ai pas trouvé de cours correspondant à ta demande aux {STUDIOS[studio]['label']}."
 
     return "\n\n".join(res)
+
+def answer_boxe_price() -> str:
+    return (
+        f"Un cours de **Boxe** :\n"
+        f"- Sans abonnement : **{eur(UNIT_PRICE['training'])}**\n"
+        f"- Si tu es abonné(e) : ça dépend de ton pass (au **prorata** : prix du pass / nb sessions). "
+        f"Dis-moi juste ton pass et ton nombre de sessions (ex: *Pass Focus 4*) et je te calcule."
+    )
 
 def get_price_response(text: str) -> str:
     t = norm(text)
@@ -376,15 +366,12 @@ def get_rules_response(text: str) -> str:
     return "Peux-tu préciser ta question sur le règlement ?"
 
 def get_definition_response(text: str) -> Optional[str]:
-    # Différence
     t = norm(text)
     if "difference" in t or "différence" in t:
         if "reformer" in t and "crossformer" in t:
             return "Différence **Reformer vs Crossformer** :\n- **Reformer** : Pilates machine contrôlé, top pour la posture/gainage.\n- **Crossformer** : Pilates machine **cardio/intense**, ça transpire plus !"
     
-    # Simple définition
     ck = extract_course_key(text)
-    # Mapping définitions
     defs = {
         "reformer": "Le **Reformer** est une machine à ressorts pour travailler le Pilates en profondeur (gainage, posture).",
         "crossformer": "Le **Crossformer** est une version cardio et intense du Pilates sur machine.",
@@ -401,11 +388,12 @@ def get_definition_response(text: str) -> Optional[str]:
 # ==============================================================================
 
 def deterministic_router(text: str) -> Tuple[Optional[str], bool]:
+    t = norm(text)
     # 0. Humain
     if intent_human(text):
         return human_alert("Ça marche, je te mets en relation avec l'équipe.")
         
-    # 1. Suspension (Avant inscription pour éviter le conflit)
+    # 1. Suspension
     if intent_suspension(text):
         return get_suspension_response(), False
     
@@ -414,12 +402,14 @@ def deterministic_router(text: str) -> Tuple[Optional[str], bool]:
         return get_signup_response(), False
         
     # 3. Planning
-    if intent_planning(text) or extract_course_key(text): # Si nom de cours détecté, on tente le planning
-        # Mais on vérifie que ce n'est pas une demande de prix ou def
+    if intent_planning(text) or extract_course_key(text): 
         if not intent_pricing(text) and not intent_definition(text):
             return get_planning_response(text), False
         
-    # 4. Prix
+    # 4. Prix (Priorité Boxe)
+    if "boxe" in t and any(w in t for w in ["prix", "tarif", "cout", "combien"]):
+        return answer_boxe_price(), False
+
     if intent_pricing(text):
         return get_price_response(text), False
         
@@ -442,19 +432,34 @@ def call_gemini(user_text: str, history: List[Dict[str, str]]) -> Tuple[str, boo
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel("gemini-2.5-flash")
 
+    # CERVEAU AMÉLIORÉ : INTELLIGENCE PSYCHOLOGIQUE
     system_prompt = """
-    Tu es Sarah, assistante du studio SVB. Ton ton est naturel, court et chaleureux.
-    
-    RÈGLES D'OR :
-    1. NE JAMAIS inventer de prix ou d'horaires. Si tu ne sais pas, dis-le.
-    2. Si on te demande "C'est quoi le Crossformer ?", explique brièvement (Pilates sur machine, cardio).
-    3. Si la demande concerne une suspension, un tarif précis ou le planning, renvoie vers l'équipe si tu n'as pas l'info exacte via le code.
-    
-    Ton but est d'orienter le client vers le bon type de cours (Machine vs Training) ou de répondre aux questions simples de conversation.
+    Tu es Sarah, l'assistante experte et empathique du studio SVB.
+    Ton but n'est pas juste de donner des infos, mais de COMPRENDRE le besoin caché du client.
+
+    🧠 TA MATRICE DE DÉDUCTION (Si le client dit ça -> Tu proposes ça) :
+    1. BESOIN : "Se défouler", "Stressé", "Journée horrible", "Énergie", "Transpirer", "Gants"
+       👉 SOLUTION : Propose les cours INTENSES aux DOCKS (Boxe, Cross Training).
+       👉 ARGUMENT : "Rien de mieux pour lâcher prise et tout oublier !"
+
+    2. BESOIN : "Mal au dos", "Reprise douce", "Enceinte", "Pas sportif", "Raide", "Souplesse"
+       👉 SOLUTION : Propose les cours DOUX/TECHNIQUES aux LAVANDIÈRES (Pilates Reformer, Yoga).
+       👉 ARGUMENT : "C'est idéal pour renforcer ton corps en profondeur sans chocs."
+
+    3. BESOIN : "Sculpter", "Tonifier", "Brûler", "Intense mais sans sauter partout"
+       👉 SOLUTION : Propose le CROSSFORMER (Lavandières) ou le CROSS BODY (Docks).
+
+    ⚠️ RÈGLES DE SÉCURITÉ ABSOLUES :
+    - Ne jamais inventer un prix (si tu ne l'as pas, dis "Je n'ai pas le tarif exact sous les yeux").
+    - Ne jamais inventer un horaire précis (si le client ne donne pas de jour, demande-lui "Tu préfères venir quel jour ?").
+    - Si la question est technique (appli qui bug, paiement), renvoie vers WhatsApp.
+
+    TON TON :
+    Chaleureux, pro, tutoiement respectueux (comme une coach).
     """
     
     msgs = [{"role": "user", "parts": [system_prompt]}]
-    for m in history[-5:]:
+    for m in history[-6:]:
         role = "user" if m["role"] == "user" else "model"
         msgs.append({"role": role, "parts": [m["content"]]})
     msgs.append({"role": "user", "parts": [user_text]})
@@ -466,7 +471,7 @@ def call_gemini(user_text: str, history: List[Dict[str, str]]) -> Tuple[str, boo
         return txt, needs_wa
     except Exception as e:
         log.error(f"Gemini error: {e}")
-        return "Oups, petit souci de connexion. Passe par WhatsApp !", True
+        return "Oups, je réfléchis trop... Un petit souci de connexion. Réessaie !", True
 
 # ==============================================================================
 # 9) APP LOOP & UX
