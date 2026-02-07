@@ -1,439 +1,214 @@
-# Receptionniste.py
-from __future__ import annotations
-
-import os
-import re
-import random
-import logging
-import traceback
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
-
 import streamlit as st
+import google.generativeai as genai
+import os
+import datetime
 
-logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("SVB_SARAH")
+# ==============================================================================
+# 1. CONFIGURATION & STYLE
+# ==============================================================================
+st.set_page_config(page_title="Sarah - SVB", page_icon="🧡")
 
-# ------------------------------------------------------------------------------
-# 0) CHARGEMENT ROBUSTE DE knowledge.py (évite les ImportError)
-# ------------------------------------------------------------------------------
-def load_knowledge_module():
-    here = Path(__file__).resolve().parent
-    kp = here / "knowledge.py"
-
-    if not kp.exists():
-        st.error("❌ Fichier **knowledge.py** introuvable.")
-        st.info("👉 Mets **knowledge.py** dans le **même dossier** que Receptionniste.py (dans ton repo Streamlit Cloud).")
-        st.stop()
-
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("knowledge", str(kp))
-    if spec is None or spec.loader is None:
-        st.error("❌ Impossible de charger knowledge.py (spec/loader).")
-        st.stop()
-
-    mod = importlib.util.module_from_spec(spec)
-    try:
-        spec.loader.exec_module(mod)
-        return mod
-    except Exception:
-        st.error("❌ Erreur dans **knowledge.py** (syntaxe / copier-coller incomplet).")
-        st.code(traceback.format_exc())
-        st.info("👉 Corrige l’erreur affichée ci-dessus (ou recolle un knowledge.py propre).")
-        st.stop()
-
-K = load_knowledge_module()
-
-# ------------------------------------------------------------------------------
-# 1) GEMINI (optionnel)
-# ------------------------------------------------------------------------------
-try:
-    import google.generativeai as genai  # type: ignore
-    GEMINI_AVAILABLE = True
-except Exception:
-    GEMINI_AVAILABLE = False
-
-# ------------------------------------------------------------------------------
-# 2) PAGE CONFIG + CSS
-# ------------------------------------------------------------------------------
-st.set_page_config(page_title="Sarah - SVB", page_icon="🧡", layout="centered")
-
-st.markdown(
-    """
+st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Lato:wght@400;700&display=swap');
-.stApp{background:linear-gradient(180deg,#F9F7F2 0%,#E6F0E6 100%);font-family:'Lato',sans-serif;color:#4A4A4A;}
-#MainMenu, footer, header {visibility:hidden;}
-h1{font-family:'Dancing Script',cursive;color:#8FB592;text-align:center;font-size:3.4rem !important;margin-bottom:0px !important;text-shadow:2px 2px 4px rgba(0,0,0,0.10);}
-.subtitle{text-align:center;color:#EBC6A6;font-size:1.0rem;font-weight:700;margin-bottom:18px;text-transform:uppercase;letter-spacing:2px;}
-.stChatMessage{background-color:rgba(255,255,255,0.95)!important;border:1px solid #EBC6A6;border-radius:15px;padding:14px;box-shadow:0 4px 6px rgba(0,0,0,0.05);color:#1f1f1f !important;}
-.stChatMessage p,.stChatMessage li{color:#1f1f1f !important;line-height:1.6;}
-.stButton button{background:linear-gradient(90deg,#25D366 0%,#128C7E 100%);color:white !important;border:none;border-radius:25px;padding:12px 25px;font-weight:800;width:100%;text-transform:uppercase;}
-.stButton button:hover{transform: scale(1.02);}
+.stApp { background-color: #ffffff; color: #000000; font-family: sans-serif; }
+.stChatMessage { background-color: #f0f2f6; border-radius: 15px; padding: 15px; color: #000000; }
+h1 { color: #8FB592; text-align: center; font-family: cursive; }
+.info-box { background-color: #e8f4ea; padding: 15px; border-radius: 10px; margin-bottom: 20px; font-size: 0.9em; }
 </style>
-""",
-    unsafe_allow_html=True,
-)
+""", unsafe_allow_html=True)
 
-st.markdown("<h1>Sarah</h1>", unsafe_allow_html=True)
-st.markdown("<div class='subtitle'>SVB</div>", unsafe_allow_html=True)
-
-# ------------------------------------------------------------------------------
-# 3) ON RÉCUPÈRE TOUT DE knowledge.py
-# ------------------------------------------------------------------------------
-CONTACT = K.CONTACT
-STUDIOS = K.STUDIOS
-UNIT_PRICE = K.UNIT_PRICE
-TRIAL = K.TRIAL
-STARTER = K.STARTER
-BOOST = K.BOOST
-FEES_AND_ENGAGEMENT = K.FEES_AND_ENGAGEMENT
-COACHING = K.COACHING
-PASS = K.PASS
-KIDS = K.KIDS
-RULES = K.RULES
-PARRAINAGE = K.PARRAINAGE
-DAY_ORDER = K.DAY_ORDER
-SLOTS = K.SLOTS
-DEFINITIONS = K.DEFINITIONS
-PASS_INCLUDES = K.PASS_INCLUDES
+st.title("Sarah - SVB 🧡")
 
 # ==============================================================================
-# HELPERS
+# 2. LE CERVEAU (MANUEL DU STUDIO)
+# C'EST ICI QUE TOUT EST ANTICIPÉ. L'IA LIT ÇA AVANT DE RÉPONDRE.
 # ==============================================================================
-def eur(x: float) -> str:
-    s = f"{x:,.2f}".replace(",", " ").replace(".", ",")
-    return f"{s}€"
 
-def norm(s: str) -> str:
-    return (s or "").strip().lower()
+SYSTEM_INSTRUCTIONS = """
+TU ES SARAH, LA MANAGER VIRTUELLE DU STUDIO DE SPORT "SVB" (SANTEZ-VOUS BIEN).
+Ton rôle est d'accueillir, renseigner, vendre et rassurer. Tu es chaleureuse, pro et tu utilises des emojis.
 
-def strip_accents_cheap(s: str) -> str:
-    repl = {"é":"e","è":"e","ê":"e","ë":"e","à":"a","â":"a","î":"i","ï":"i","ô":"o","ù":"u","û":"u","ç":"c","’":"'","“":'"',"”":'"'}
-    for k,v in repl.items():
-        s = s.replace(k,v)
-    return s
+--- RÈGLES D'INTELLIGENCE ---
+1. COMPRÉHENSION : Tu dois comprendre les fautes ("pialte" = Pilates, "pric" = Prix, "cour" = Cours).
+2. DÉDUCTION : 
+   - "Je veux me muscler le dos" -> Propose Pilates Reformer.
+   - "Je veux transpirer" -> Propose Boxe ou Cross Training.
+   - "C'est cher" -> Propose l'offre Starter ou le paiement au cours.
+3. PRÉCISION : Ne donne JAMAIS un prix au hasard. Utilise la grille ci-dessous.
 
-def norm2(s: str) -> str:
-    return strip_accents_cheap(norm(s))
+--- 📍 LES LIEUX ---
+1. Studio DOCKS (6 Mail André Breton) : Ambiance "Garage", Intensité, Boxe, Cross Training.
+2. Studio LAVANDIÈRES (40 Cours des Lavandières) : Ambiance "Zen/Chic", Pilates Machines, Yoga.
+CONTACT HUMAIN : WhatsApp 07 44 91 91 55 (Pour bugs appli, factures, urgences).
 
-def safe_finalize(text: str) -> str:
-    t = (text or "").strip()
-    if not t:
-        return t
-    words = norm2(t).split()
-    last = words[-1] if words else ""
-    if last in {"si","mais","car","donc","parce","parceque","alors"}:
-        return "Tu pensais à l’unité ou en abonnement (2/4/6/8/10/12 sessions) ? 🙂"
-    if re.search(r"[A-Za-zÀ-ÖØ-öø-ÿ0-9]$", t) and not re.search(r"[\.!\?…]$", t):
-        return t + " 🙂"
-    return t
+--- 💰 LA GRILLE TARIFAIRE (BIBLE DES PRIX) ---
+Si on demande un prix, sois précise.
 
-def wa_button():
-    st.markdown("---")
-    st.link_button(CONTACT["whatsapp_label"], CONTACT["whatsapp_url"])
+A L'UNITÉ (SANS ABONNEMENT) :
+- Cours Training (Sol/Boxe/Yoga) : 30€
+- Cours Machine (Reformer/Crossformer) : 50€
+- SÉANCE D'ESSAI : 30€ (Dont 15€ remboursés si achat d'un pass ensuite).
 
-def has_any(text: str, words: List[str]) -> bool:
-    t = norm2(text)
-    return any(w in t for w in words)
+OFFRES DE DÉMARRAGE :
+- STARTER : 99,90€ (5 sessions, Valable 1 mois). Top pour tester !
+- OPTION BOOST : 9,90€/mois (Suspension illimitée + Frais dossier offerts + 1 invité/mois).
 
-# ==============================================================================
-# EXTRACTION
-# ==============================================================================
-def find_sessions_count(text: str) -> Optional[int]:
-    m = re.search(r"\b(2|4|6|8|10|12)\b", norm2(text))
-    return int(m.group(1)) if m else None
+LES PASS MENSUELS (Abonnements) :
+*Note : Le prix à la séance baisse avec la taille du pass.*
 
-def intent_sessions_only(text: str) -> bool:
-    return re.match(r"^\s*(2|4|6|8|10|12)\s*(seance|seances|séance|séances|session|sessions)?\s*$", text.strip(), re.I) is not None
+1. PASS FOCUS (Accès : Pilates Sol, Yoga, Mat)
+   - 4 sessions/mois : 72,30€
+   - 8 sessions/mois : 136,30€
+   - 12 sessions/mois : 192,30€
 
-def find_pass_key(text: str) -> Optional[str]:
-    t = norm2(text)
-    patterns = [
-        ("full former","full_former"), ("fullformer","full_former"),
-        ("pass full","full"), ("pass focus","focus"), ("pass cross","cross"),
-        ("crossformer","crossformer"), ("reformer","reformer"),
-        ("kids","kids"), ("enfant","kids"),
-        ("full","full"), ("focus","focus"), ("cross","cross")
-    ]
-    for needle, key in patterns:
-        if needle in t:
-            return key
-    return None
+2. PASS REFORMER (Accès : Pilates Reformer - Machine Zen)
+   - 4 sessions/mois : 136,30€
+   - 8 sessions/mois : 256,30€
+   - 12 sessions/mois : 360,30€
 
-def extract_course_key(text: str) -> Optional[str]:
-    t = norm2(text)
-    aliases = {
-        "pilates reformer":"reformer","pilate reformer":"reformer","reformer":"reformer",
-        "cross-former":"crossformer","cross former":"crossformer","crossformer":"crossformer",
-        "boxe":"boxe","boxing":"boxe","afrodance":"afrodance","afrodance all":"afrodance","afrodance'all":"afrodance",
-        "cross training":"cross training","cross core":"cross core","cross body":"cross body","cross rox":"cross rox","cross yoga":"cross yoga",
-        "yoga vinyasa":"yoga vinyasa","vinyasa":"yoga vinyasa",
-        "hatha flow":"hatha flow","hatha":"hatha flow",
-        "classic pilates":"classic pilates","power pilates":"power pilates",
-        "core & stretch":"core & stretch","core and stretch":"core & stretch","stretch":"core & stretch",
-        "yoga kids":"yoga kids","training kids":"training kids",
-    }
-    for k in sorted(aliases.keys(), key=len, reverse=True):
-        if k in t:
-            return aliases[k]
-    return None
+3. PASS CROSSFORMER (Accès : Machine Cardio Intense)
+   - 4 sessions/mois : 152,30€
+   - 8 sessions/mois : 288,30€
+   - 12 sessions/mois : 408,30€
 
-def canonical_to_course_name(ck: str) -> Optional[str]:
-    m = {
-        "reformer":"Reformer","crossformer":"Cross-Former",
-        "boxe":"Boxe","afrodance":"Afrodance'All",
-        "cross training":"Cross Training","cross core":"Cross Core","cross body":"Cross Body","cross rox":"Cross Rox","cross yoga":"Cross Yoga",
-        "yoga vinyasa":"Yoga Vinyasa","hatha flow":"Hatha Flow","classic pilates":"Classic Pilates","power pilates":"Power Pilates","core & stretch":"Core & Stretch",
-        "yoga kids":"Yoga Kids","training kids":"Training Kids",
-    }
-    return m.get(ck)
+4. PASS CROSS (Accès : Boxe, Cross Training - Docks)
+   - 4 sessions/mois : 60,30€
+   - 8 sessions/mois : 116,30€
+   - 12 sessions/mois : 168,30€
 
-def infer_pass_from_course(ck: Optional[str]) -> Optional[str]:
-    if not ck:
-        return None
-    cname = canonical_to_course_name(ck)
-    if not cname:
-        return None
-    for pk, courses in PASS_INCLUDES.items():
-        if cname in courses:
-            return pk
-    return None
+5. PASS FULL (Accès : Cross + Focus)
+   - 4 sessions/mois : 80,30€
+   - 8 sessions/mois : 150,30€
+   - 12 sessions/mois : 210,30€
 
-def pass_unit_price(pass_key: str, sessions: int) -> Optional[float]:
-    p = PASS.get(pass_key)
-    if not p or sessions not in p.prices:
-        return None
-    return round(p.prices[sessions].total / sessions, 2)
+6. PASS KIDS (Enfants)
+   - 2 sessions/mois : 35,30€
+   - 4 sessions/mois : 65,30€
 
-# ==============================================================================
-# STATE (mémoire courte)
-# ==============================================================================
-def ensure_state():
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-    if "did_greet" not in st.session_state:
-        st.session_state.did_greet = False
-    if "profile" not in st.session_state:
-        st.session_state.profile = {"course": None, "pass_key": None, "sessions": None}
+--- 📅 LE PLANNING TYPE ---
+(Si on demande "C'est quand la boxe ?", regarde ici)
 
-def update_profile(text: str):
-    p = st.session_state.profile
-    ck = extract_course_key(text)
-    if ck:
-        p["course"] = ck
-    pk = find_pass_key(text)
-    if pk:
-        p["pass_key"] = pk
-    n = find_sessions_count(text)
-    if n:
-        p["sessions"] = n
+LUNDI :
+- Docks : 12h/19h Cross Training, 13h Cross Core, 20h Cross Body.
+- Lavandières : 12h/18h45 Crossformer, 12h15/19h15 Reformer, 12h30/19h Yoga Vinyasa.
 
-def first_message() -> str:
-    return random.choice([
-        "Salut 🙂 Tu cherches plutôt Machines (Reformer/Crossformer) ou Training (Cross/Boxe/Yoga) ?",
-        "Hello 🙂 Dis-moi ton objectif (tonus, cardio, dos, mobilité…) et je te guide.",
-    ])
+MARDI :
+- Docks : 12h Cross Rox, 19h Cross Body, 20h Cross Training.
+- Lavandières : 07h30 Hatha Flow, 11h45/18h45 Crossformer, 12h/20h Power Pilates, 13h15/19h15 Reformer.
 
-ensure_state()
-if not st.session_state.did_greet and len(st.session_state.messages) == 0:
-    st.session_state.messages.append({"role": "assistant", "content": first_message()})
-    st.session_state.did_greet = True
+MERCREDI :
+- Docks : 12h/19h Cross Training, 16h Yoga Kids, 20h Boxe.
+- Lavandières : 10h15/12h15/19h15 Crossformer, 12h/19h/20h Reformer.
+
+JEUDI :
+- Docks : 08h Cross Core, 12h Cross Body, 13h Boxe, 18h Cross Training, 19h Afrodance.
+- Lavandières : 07h Pilates, 12h Yoga, 12h15/18h Crossformer, 12h30/18h45 Reformer, 20h15 Cross Yoga.
+
+VENDREDI :
+- Docks : 18h Cross Rox, 19h Cross Training.
+- Lavandières : 09h45/10h45/19h15 Crossformer, 12h/13h/18h30 Reformer.
+
+SAMEDI :
+- Docks : 09h30 Kids, 10h30 Cross Body, 11h30 Cross Training.
+- Lavandières : 09h/10h Reformer, 09h30/10h30 Crossformer, 11h15 Core & Stretch.
+
+DIMANCHE :
+- Docks : 10h30 Cross Training, 11h30 Cross Yoga.
+- Lavandières : 10h/11h Crossformer, 10h15/11h15 Reformer, 11h30 Yoga.
+
+--- 🛡️ FAQ & RÈGLEMENT (ANTICIPATION DES PROBLÈMES) ---
+- RETARD : "Tolérance 5 minutes max. Après, porte fermée pour sécurité."
+- TENUE : "Baskets propres aux Docks. Chaussettes antidérapantes OBLIGATOIRES aux Lavandières."
+- DOUCHES : "Oui, douches individuelles, casiers et sèche-cheveux dispos partout."
+- PARKING : "Lavandières = Parking en face. Docks = Difficile, visez le parking Mairie."
+- ENCEINTE : "OK pour Reformer/Yoga (avec avis médical). INTERDIT pour Cross/Boxe/Crossformer."
+- BLESSURE : "Préviens le coach AVANT le cours, il adaptera."
+- PAIEMENT : "CB sur l'appli ou sur place. Pas de chèques vacances."
+- RÉSERVATION : "Tout se fait sur l'application SVB ou Sportigo."
+- ANNULATION : "1h avant pour les cours collectifs, sinon décompté."
+
+--- EXEMPLES DE RÉPONSES ---
+User: "C'est quoi le pric du pialte ?"
+Sarah: "Tu parles du Pilates Machine (Reformer) ou au Sol (Mat) ?
+- Le Pass Reformer (Machine) est à 136,30€ pour 4 séances.
+- Le Pass Focus (Sol) est à 72,30€ pour 4 séances."
+
+User: "Je peux me garer ?"
+Sarah: "Aux Lavandières, il y a un parking public en face. Aux Docks, c'est plus dur, je te conseille le parking de la Mairie !"
+"""
 
 # ==============================================================================
-# INTENTS
+# 3. LE MOTEUR IA (CONNEXION GOOGLE GEMINI)
 # ==============================================================================
-def intent_price(text: str) -> bool:
-    return has_any(text, ["tarif","prix","combien","coute","coûte","abonnement","forfait","mensuel","mois"])
 
-def intent_unit_price(text: str) -> bool:
-    return has_any(text, ["a l'unite","à l'unité","sans abonnement","sans abo","unité","unite"])
-
-def intent_definition(text: str) -> bool:
-    return has_any(text, ["c'est quoi","c quoi","definition","définition","explique","différence","difference"])
-
-def intent_signup(text: str) -> bool:
-    return has_any(text, ["m'inscrire","inscription","creer un compte","créer un compte","identifiant","connexion","appli","application","sportigo"])
-
-# ==============================================================================
-# RÉPONSES
-# ==============================================================================
-def answer_signup() -> str:
-    return safe_finalize(
-        "Pour t’inscrire :\n\n"
-        "1) Tu souscris ton abonnement en ligne.\n"
-        "2) Après le paiement, tu reçois automatiquement un e-mail avec tes identifiants.\n"
-        "3) Tu télécharges l’application (SVB / Sportigo).\n"
-        "4) Tu rentres les identifiants reçus par e-mail.\n"
-        "5) Ensuite tu réserves tes séances ✅\n\n"
-        "Si tu ne reçois pas l’e-mail (spam / délai), écris-nous sur WhatsApp."
-    )
-
-def answer_definition(text: str) -> Optional[str]:
-    ck = extract_course_key(text)
-    if ck and ck in DEFINITIONS:
-        return safe_finalize(DEFINITIONS[ck])
-    return None
-
-def answer_unit_price(text: str) -> str:
-    ck = extract_course_key(text)
-    if ck in ("reformer","crossformer"):
-        return safe_finalize(f"Sans abonnement, une séance **Machine** est à **{eur(UNIT_PRICE['machine'])}**.")
-    return safe_finalize(f"Sans abonnement, une séance **Training / cours** est à **{eur(UNIT_PRICE['training'])}**.")
-
-def answer_pass_price(pass_key: str, sessions: int) -> Optional[str]:
-    p = PASS.get(pass_key)
-    if not p or sessions not in p.prices:
-        return None
-    total = p.prices[sessions].total
-    unit = pass_unit_price(pass_key, sessions)
-    extra = ""
-    if pass_key == "kids":
-        extra = f"\n- Séance supplémentaire kids : **{eur(KIDS['extra_session'])}**"
-    studio_txt = STUDIOS[p.where]["label"] if p.where in STUDIOS else p.where
-    return safe_finalize(
-        f"📌 **{p.label}** — {sessions} sessions / mois\n"
-        f"- Total : **{eur(total)}**\n"
-        f"- Prix / séance : **{eur(unit)}**\n"
-        f"- Durée : {p.duration_min} min\n"
-        f"- Studio : {studio_txt}"
-        f"{extra}"
-    )
-
-def answer_ask_sessions(ck: str) -> str:
-    if ck in ("reformer","crossformer"):
-        return safe_finalize("Tu veux **à l’unité** ou en abonnement : **2/4/6/8/10/12 sessions** par mois ?")
-    return safe_finalize("Tu veux combien de sessions par mois : **2/4/6/8/10/12** ?")
-
-def deterministic_router(user_text: str) -> Tuple[Optional[str], bool]:
-    prof = st.session_state.profile
-
-    if intent_signup(user_text):
-        return answer_signup(), True
-
-    if intent_definition(user_text):
-        d = answer_definition(user_text)
-        if d:
-            return d, False
-
-    # ✅ réponse courte “4 session”
-    if intent_sessions_only(user_text):
-        n = find_sessions_count(user_text) or prof.get("sessions")
-        pk = prof.get("pass_key") or infer_pass_from_course(prof.get("course"))
-        if pk and n:
-            out = answer_pass_price(pk, int(n))
-            if out:
-                return out, False
-        return safe_finalize("OK 🙂 Tu parles de quel pass ? (Cross / Focus / Full / Reformer / Crossformer / Full Former)"), False
-
-    if intent_unit_price(user_text):
-        return answer_unit_price(user_text), False
-
-    if intent_price(user_text):
-        ck = extract_course_key(user_text)
-        if ck and not find_sessions_count(user_text) and not find_pass_key(user_text) and not intent_unit_price(user_text):
-            return answer_ask_sessions(ck), False
-
-        pk = find_pass_key(user_text) or prof.get("pass_key") or infer_pass_from_course(extract_course_key(user_text) or prof.get("course"))
-        n = find_sessions_count(user_text) or prof.get("sessions")
-        if pk and n:
-            out = answer_pass_price(pk, int(n))
-            if out:
-                return out, False
-
-    return None, False
-
-# ==============================================================================
-# GEMINI fallback (optionnel)
-# ==============================================================================
-def get_api_key() -> Optional[str]:
+def get_ai_response(user_message, history):
+    # 1. Vérification de la clé
     try:
-        if "GOOGLE_API_KEY" in st.secrets:
-            return st.secrets["GOOGLE_API_KEY"]
-    except Exception:
-        pass
-    return os.getenv("GOOGLE_API_KEY")
+        api_key = st.secrets["GOOGLE_API_KEY"]
+    except:
+        # Fallback si pas de fichier secrets (pour tester en local avec variable d'env)
+        api_key = os.getenv("GOOGLE_API_KEY")
+    
+    if not api_key:
+        return "⚠️ **Erreur Technique** : Je n'ai pas trouvé ma clé API. Dis à mon créateur de vérifier le fichier `secrets.toml` !"
 
-@st.cache_resource
-def get_model(api_key: str):
+    # 2. Configuration Gemini
     genai.configure(api_key=api_key)
-    return genai.GenerativeModel("gemini-2.5-flash")
+    model = genai.GenerativeModel("gemini-1.5-flash") # Modèle rapide et intelligent
 
-SYSTEM_PROMPT = """
-Tu fais partie de l’équipe SVB.
-Tu ne dis jamais “Bienvenue…”.
-Tu n’inventes aucun prix/horaires/règles.
-Tu finis toujours avec une phrase complète.
-""".strip()
+    # 3. Construction de la conversation
+    # On injecte le SYSTEM_INSTRUCTIONS au début pour lui donner sa personnalité
+    chat_session = model.start_chat(
+        history=[
+            {"role": "user", "parts": [SYSTEM_INSTRUCTIONS]},
+            {"role": "model", "parts": ["Compris. Je suis Sarah, l'assistante SVB. Je connais le planning, les prix et les règles par cœur. Je suis prête."]}
+        ]
+    )
 
-def sanitize_llm(text: str) -> str:
-    t = (text or "").strip()
-    t2 = norm2(t)
-    if t2.startswith("bienvenue") or ("bienvenue" in t2[:40] and t2.startswith("hello")):
-        t = re.sub(r"(?i)^.*?(\?\s*)", "", t).strip()
-    return safe_finalize(t)
-
-def call_gemini(api_key: str, history: List[Dict[str, str]]) -> Tuple[str, bool]:
-    model = get_model(api_key)
-    contents: List[Dict[str, Any]] = [{"role": "user", "parts": [{"text": SYSTEM_PROMPT}]}]
-    for msg in history[-18:]:
+    # 4. Ajout de l'historique récent (pour qu'elle se souvienne de la discussion)
+    for msg in history:
         role = "user" if msg["role"] == "user" else "model"
-        contents.append({"role": role, "parts": [{"text": msg["content"]}]})
-    resp = model.generate_content(contents, generation_config={"temperature": 0.35, "top_p": 0.9, "max_output_tokens": 220})
-    txt = sanitize_llm(resp.text or "")
-    if not txt:
-        txt = "Tu cherches plutôt Machines (Reformer/Crossformer) ou Training (Cross/Boxe/Yoga) ? 🙂"
-    return txt, ("whatsapp" in norm2(txt))
+        chat_session.history.append({"role": role, "parts": [msg["content"]]})
+
+    # 5. Envoi de la question
+    try:
+        response = chat_session.send_message(user_message)
+        return response.text
+    except Exception as e:
+        return f"Oups, j'ai eu un petit bug de connexion ({e}). Tu peux répéter ?"
 
 # ==============================================================================
-# UI
+# 4. INTERFACE UTILISATEUR (CHATBOT)
 # ==============================================================================
-with st.sidebar:
-    st.markdown("### SVB • Infos")
-    st.caption(f"WhatsApp : {CONTACT['phone']}")
-    st.caption(f"Email : {CONTACT['email']}")
-    st.caption(f"Instagram : {CONTACT['instagram']}")
 
+# Initialisation
+if "messages" not in st.session_state:
+    st.session_state.messages = [{
+        "role": "assistant", 
+        "content": "Bonjour ! Je suis Sarah. Planning, Tarifs, Conseils... Je t'écoute ! 🙂"
+    }]
+
+# Affichage des messages précédents
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-api_key = get_api_key()
-prompt = st.chat_input("Posez votre question...")
-
-if prompt:
-    update_profile(prompt)
+# Zone de saisie
+if prompt := st.chat_input("Pose ta question... (ex: Prix Reformer, Parking, Tenue...)"):
+    # 1. Afficher le message utilisateur
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    det, needs_wa = deterministic_router(prompt)
+    # 2. Générer la réponse IA
+    with st.chat_message("assistant"):
+        with st.spinner("Sarah réfléchit..."):
+            ai_reply = get_ai_response(prompt, st.session_state.messages[:-1])
+            st.markdown(ai_reply)
 
-    if det is not None:
-        with st.chat_message("assistant"):
-            st.markdown(det)
-        st.session_state.messages.append({"role": "assistant", "content": det})
-        if needs_wa:
-            wa_button()
-    else:
-        if not GEMINI_AVAILABLE or not api_key:
-            txt = safe_finalize("Dis-moi juste : quel cours + combien de sessions (2/4/6/8/10/12) et je te calcule 🙂")
-            with st.chat_message("assistant"):
-                st.markdown(txt)
-            st.session_state.messages.append({"role": "assistant", "content": txt})
-        else:
-            try:
-                with st.chat_message("assistant"):
-                    with st.spinner("..."):
-                        txt, needs_wa2 = call_gemini(api_key, st.session_state.messages)
-                    st.markdown(txt)
-                st.session_state.messages.append({"role": "assistant", "content": txt})
-                if needs_wa2:
-                    wa_button()
-            except Exception:
-                log.exception("Erreur Gemini")
-                txt = safe_finalize("Petit souci technique. Le plus simple : WhatsApp 🙂")
-                with st.chat_message("assistant"):
-                    st.markdown(txt)
-                st.session_state.messages.append({"role": "assistant", "content": txt})
-                wa_button()
+            # Petit bonus : Bouton WhatsApp si l'IA sent que c'est nécessaire
+            if "whatsapp" in ai_reply.lower() or "équipe" in ai_reply.lower():
+                st.link_button("📞 Contacter l'équipe sur WhatsApp", "https://wa.me/33744919155")
+
+    # 3. Sauvegarder la réponse
+    st.session_state.messages.append({"role": "assistant", "content": ai_reply})
