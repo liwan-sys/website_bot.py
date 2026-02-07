@@ -1,20 +1,12 @@
 # ==============================================================================
-# SARAH — SVB CHATBOT (Streamlit + Gemini) — RESET TOTAL (VERSION PROPRE / ANTI-ERREURS)
+# SARAH — SVB CHATBOT (Streamlit + Gemini) — VERSION CORRIGÉE & FLUIDE
 # ==============================================================================
 #
 # OBJECTIF
 # - ZÉRO erreur sur : tarifs, règles, inscription, planning, définitions, engagements.
 # - 95% des réponses = Python (déterministe).
-# - Gemini = uniquement orientation + reformulation + questions de qualification (SANS chiffres/horaires).
-#
-# SOURCES INTÉGRÉES
-# - Brochures (images) : tarifs small group, coaching, kids, règlement intérieur, planners Docks/Lavandières.
-# - Site (tarifs) : cohérence de l’essai / informations générales. :contentReference[oaicite:1]{index=1}
-#
-# IMPORTANT
-# - Dès qu’une règle est incertaine => bascule WhatsApp (mais UNIQUEMENT dans ce cas).
-# - Le bot ne se présente pas en boucle : accueil 1 seule fois puis style humain.
-# - Les prix “séance supp abonné” = AU PRORATA du pass (prix / nb sessions) (sauf Kids : 18,30€ indiqué).
+# - Gemini = uniquement orientation + reformulation + questions de qualification.
+# - Suppression des guardrails excessifs qui bloquaient l'IA.
 #
 # ==============================================================================
 
@@ -696,12 +688,13 @@ def intent_human(text: str) -> bool:
     ])
 
 def intent_signup(text: str) -> bool:
-    return has_any(text, [
-        "m'inscrire", "inscrire", "inscription", "abonner", "abonnement",
-        "creer un compte", "créer un compte", "compte",
-        "identifiant", "identifiants", "mot de passe", "connexion", "connecter",
-        "application", "appli"
-    ])
+    # Must explicitely mention signup actions (removed "abonnement" alone)
+    signup_keywords = ["m'inscrire", "inscrire", "inscription", "s'inscrire", "creer un compte", "créer un compte", "nouvel adherent", "nouveau membre"]
+    app_keywords = ["identifiant", "mot de passe", "connexion", "connecter", "pas reçu mail", "pas recu mail"]
+    return has_any(text, signup_keywords + app_keywords)
+
+def intent_suspension(text: str) -> bool:
+    return has_any(text, ["pause", "suspendre", "suspension", "arret", "arrêt", "vacance"])
 
 def intent_trial(text: str) -> bool:
     return has_any(text, ["essai", "seance d'essai", "séance d'essai", "tester", "découverte", "decouverte"])
@@ -719,7 +712,7 @@ def intent_rules(text: str) -> bool:
     return has_any(text, [
         "annulation", "annuler", "report", "reporter", "cumul", "cumulable",
         "resiliation", "résiliation", "preavis", "préavis",
-        "suspension", "absence", "absent", "retard", "chaussette", "chaussettes",
+        "absence", "absent", "retard", "chaussette", "chaussettes",
         "reglement", "règlement", "interieur", "intérieur"
     ])
 
@@ -769,6 +762,14 @@ def ack() -> str:
 def human_alert(reason: str = "") -> Tuple[str, bool]:
     txt = reason.strip() if reason else "Je te mets directement avec l’équipe pour être sûr à 100% 🙂"
     return txt, True
+
+def answer_suspension() -> str:
+    return (
+        "🛑 **Mettre en pause son abonnement** :\n\n"
+        "1. **Avec l'Option Boost** : La suspension est libre, sans préavis et sans justificatif.\n"
+        "2. **Sans Option Boost (Standard)** : La suspension n'est possible que pour une absence **supérieure à 10 jours** et nécessite un **préavis d'1 mois**.\n\n"
+        "Pour activer une suspension, contactez-nous directement via WhatsApp."
+    )
 
 def answer_signup() -> str:
     # validé par toi
@@ -1127,11 +1128,15 @@ def deterministic_router(user_text: str) -> Tuple[Optional[str], bool]:
     if intent_human(user_text):
         return human_alert("OK 🙂 je te mets avec l’équipe." )
 
-    # 1) inscription
+    # 1) Suspension (AVANT l'inscription)
+    if intent_suspension(user_text):
+        return answer_suspension(), False
+
+    # 2) inscription
     if intent_signup(user_text):
         return answer_signup(), False
 
-    # 2) planning
+    # 3) planning
     # (on le met haut pour que “quel jour reformer” marche immédiatement)
     if intent_planning(user_text):
         # planning doit passer avant “prix” etc
@@ -1139,13 +1144,13 @@ def deterministic_router(user_text: str) -> Tuple[Optional[str], bool]:
         if ("planning" in t) or ("horaire" in t) or ("quel jour" in t) or ("a quelle heure" in t) or ck is not None:
             return answer_planning(user_text), False
 
-    # 3) définitions
+    # 4) définitions
     if intent_definition(user_text):
         d = answer_definition(user_text)
         if d:
             return d, False
 
-    # 4) essai / starter / boost / parrainage
+    # 5) essai / starter / boost / parrainage
     if intent_trial(user_text):
         return answer_trial(), False
 
@@ -1158,30 +1163,30 @@ def deterministic_router(user_text: str) -> Tuple[Optional[str], bool]:
     if intent_parrainage(user_text):
         return answer_parrainage(), False
 
-    # 5) règles
+    # 6) règles
     if intent_rules(user_text):
         return answer_rules(user_text), False
 
-    # 6) coaching / kids
+    # 7) coaching / kids
     if intent_coaching(user_text):
         return answer_coaching(user_text), False
 
     if intent_kids(user_text):
         return answer_kids(user_text), False
 
-    # 7) prix spécifique : boxe (évite qu’il hésite)
+    # 8) prix spécifique : boxe (évite qu’il hésite)
     if "boxe" in t and ("combien" in t or "prix" in t or "tarif" in t or "coute" in t or "coûte" in t):
         return answer_boxe_price(), False
 
-    # 8) séance supp
+    # 9) séance supp
     if intent_extra_session(user_text):
         return answer_extra_session(user_text), False
 
-    # 9) prix à l’unité
+    # 10) prix à l’unité
     if intent_unit_price(user_text):
         return answer_unit_price(user_text), False
 
-    # 10) prix d’un pass
+    # 11) prix d’un pass
     if intent_pass_price(user_text):
         pk = find_pass_key(user_text)
         n = find_sessions_count(user_text)
@@ -1194,7 +1199,7 @@ def deterministic_router(user_text: str) -> Tuple[Optional[str], bool]:
     return None, False
 
 # ==============================================================================
-# 16) GEMINI — ORIENTATION UNIQUEMENT (GUARDRAILS)
+# 16) GEMINI — ORIENTATION UNIQUEMENT (SANS GUARDRAILS)
 # ==============================================================================
 
 def get_api_key() -> Optional[str]:
@@ -1210,103 +1215,14 @@ def get_model(api_key: str):
     genai.configure(api_key=api_key)
     return genai.GenerativeModel("gemini-2.5-flash")
 
-def allowed_amounts_set() -> Set[str]:
-    """
-    Liste blanche des montants autorisés dans une réponse Gemini.
-    (Idéalement : Gemini n’en met aucun, mais si jamais…)
-    """
-    allowed: Set[str] = set()
-
-    # unit
-    allowed.add(eur(UNIT_PRICE["training"]))
-    allowed.add(eur(UNIT_PRICE["machine"]))
-
-    # trial
-    allowed.add(eur(TRIAL["price"]))
-    allowed.add(eur(TRIAL["refund_if_signup"]))
-
-    # starter / boost / fees / kids extra
-    allowed.add(eur(STARTER["price"]))
-    allowed.add(eur(BOOST["price"]))
-    allowed.add(eur(FEES_AND_ENGAGEMENT["small_group_registration_fee"]))
-    allowed.add(eur(FEES_AND_ENGAGEMENT["kids_registration_fee"]))
-    allowed.add(eur(KIDS["extra_session"]))
-
-    # passes totals + per-session (prorata)
-    for p in PASS.values():
-        for k, pp in p.prices.items():
-            allowed.add(eur(pp.total))
-            unit = round(pp.total / pp.sessions, 2)
-            allowed.add(eur(unit))
-
-    # coaching
-    for k in COACHING["good_vibes"]["prices"].values():
-        allowed.add(eur(k))
-    for k in COACHING["duo"]["prices"].values():
-        allowed.add(eur(k))
-    for k in COACHING["duo"]["per_person"].values():
-        allowed.add(eur(k))
-
-    return allowed
-
-ALLOWED_AMOUNTS = allowed_amounts_set()
-
-def allowed_times_set() -> Set[str]:
-    return set([s.time for s in SLOTS])
-
-ALLOWED_TIMES = allowed_times_set()
-
-def extract_euro_tokens(text: str) -> List[str]:
-    # capture "99,90€", "30€", "300,30€"
-    tokens = re.findall(r"\b\d{1,3}(?:[ \.\,]\d{1,2})?\s?€\b", text)
-    cleaned = []
-    for tok in tokens:
-        tok = tok.replace(" ", "")
-        # normalise "30€" -> "30,00€"
-        m = re.match(r"^(\d{1,3})(?:[\,\.](\d{1,2}))?€$", tok)
-        if m:
-            euros = int(m.group(1))
-            cents = m.group(2) if m.group(2) else "00"
-            if len(cents) == 1:
-                cents = cents + "0"
-            cleaned.append(f"{euros},{cents}€")
-        else:
-            cleaned.append(tok)
-    return cleaned
-
-def extract_time_tokens(text: str) -> List[str]:
-    # capture "10h15", "8h", "20h30", also "10:15"
-    raw = re.findall(r"\b\d{1,2}(?:h|:)\d{0,2}\b", text.lower())
-    out = []
-    for r in raw:
-        r = r.replace(":", "h")
-        if r.endswith("h"):
-            out.append(r)
-        else:
-            out.append(r)
-    return out
-
-def violates_guardrails(text: str) -> bool:
-    # if Gemini outputs times or amounts not in whitelist => unsafe
-    for tok in extract_euro_tokens(text):
-        if tok not in ALLOWED_AMOUNTS:
-            return True
-    for tok in extract_time_tokens(text):
-        # ignore "1h" in generic phrases? Actually 1h is allowed rule, not planning time.
-        # We allow "1h" and "24h" because rules mention them.
-        if tok in ("1h", "24h"):
-            continue
-        if tok not in ALLOWED_TIMES:
-            return True
-    return False
-
 SYSTEM_PROMPT = f"""
 Tu fais partie de l’équipe SVB. Tu écris comme une vraie personne (naturel, simple).
 Tu NE dis JAMAIS que tu es une IA ou un bot.
 
 RÈGLES ABSOLUES :
-- Tu ne donnes AUCUN horaire précis (sauf si l’utilisateur te l’a déjà donné).
-- Tu n’inventes AUCUN prix. Si tu dois parler prix => tu invites la personne à préciser (ou renvoyer vers WhatsApp).
+- Tu ne donnes AUCUN horaire précis.
+- Tu n’inventes AUCUN prix.
+- Si tu dois parler prix ou horaire, dis que tu ne les as pas et invite à préciser.
 - Tu peux poser 1 ou 2 questions de qualification max.
 - Si tu n’es pas sûr, tu proposes WhatsApp.
 
