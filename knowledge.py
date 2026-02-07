@@ -1,617 +1,439 @@
-# -*- coding: utf-8 -*-
-"""
-knowledge.py — Base de connaissance structurée SVB (tarifs, règles, planning, définitions).
-
-✅ Objectif :
-- Centraliser les "FACTS" vérifiés.
-- Fournir des helpers (format €, extraction cours/pass, planning).
-- Zéro logique UI ici : uniquement données + fonctions.
-
-Sources utilisées pour cette version :
-- Page Tarifs SVB (abonnements + contenus de pass)
-- Page Studio / Planning (horaires)
-- FAQ SVB (règles : chaussettes, annulation, retard, résiliation, suspension, engagement)
-"""
-
+# Receptionniste.py
 from __future__ import annotations
 
+import os
 import re
-from dataclasses import dataclass
-from typing import Dict, List, Optional
+import random
+import logging
+import traceback
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
-# -----------------------------------------------------------------------------
-# CONTACT / STUDIOS
-# -----------------------------------------------------------------------------
+import streamlit as st
 
-CONTACT = {
-    "whatsapp_url": "https://wa.me/33744919155",
-    "whatsapp_label": "📞 Contacter l'équipe (WhatsApp)",
-    "email": "hello@studiosvb.fr",
-    "instagram": "@svb.officiel",
-    "phone": "07 44 91 91 55",
-}
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("SVB_SARAH")
 
-STUDIOS: Dict[str, Dict[str, str]] = {
-    "docks": {
-        "label": "Parc des Docks",
-        "address": "6 Mail André Breton, 93400 Saint-Ouen",
-    },
-    "lavandieres": {
-        "label": "Cours Lavandières",
-        "address": "40 Cours des Lavandières, 93400 Saint-Ouen",
-    },
-    "mixte": {
-        "label": "Docks + Lavandières",
-        "address": "Selon le cours",
-    },
-}
+# ------------------------------------------------------------------------------
+# 0) CHARGEMENT ROBUSTE DE knowledge.py (évite les ImportError)
+# ------------------------------------------------------------------------------
+def load_knowledge_module():
+    here = Path(__file__).resolve().parent
+    kp = here / "knowledge.py"
 
-DAY_ORDER = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+    if not kp.exists():
+        st.error("❌ Fichier **knowledge.py** introuvable.")
+        st.info("👉 Mets **knowledge.py** dans le **même dossier** que Receptionniste.py (dans ton repo Streamlit Cloud).")
+        st.stop()
 
-# -----------------------------------------------------------------------------
-# FORMATTERS
-# -----------------------------------------------------------------------------
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("knowledge", str(kp))
+    if spec is None or spec.loader is None:
+        st.error("❌ Impossible de charger knowledge.py (spec/loader).")
+        st.stop()
 
+    mod = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(mod)
+        return mod
+    except Exception:
+        st.error("❌ Erreur dans **knowledge.py** (syntaxe / copier-coller incomplet).")
+        st.code(traceback.format_exc())
+        st.info("👉 Corrige l’erreur affichée ci-dessus (ou recolle un knowledge.py propre).")
+        st.stop()
+
+K = load_knowledge_module()
+
+# ------------------------------------------------------------------------------
+# 1) GEMINI (optionnel)
+# ------------------------------------------------------------------------------
+try:
+    import google.generativeai as genai  # type: ignore
+    GEMINI_AVAILABLE = True
+except Exception:
+    GEMINI_AVAILABLE = False
+
+# ------------------------------------------------------------------------------
+# 2) PAGE CONFIG + CSS
+# ------------------------------------------------------------------------------
+st.set_page_config(page_title="Sarah - SVB", page_icon="🧡", layout="centered")
+
+st.markdown(
+    """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Lato:wght@400;700&display=swap');
+.stApp{background:linear-gradient(180deg,#F9F7F2 0%,#E6F0E6 100%);font-family:'Lato',sans-serif;color:#4A4A4A;}
+#MainMenu, footer, header {visibility:hidden;}
+h1{font-family:'Dancing Script',cursive;color:#8FB592;text-align:center;font-size:3.4rem !important;margin-bottom:0px !important;text-shadow:2px 2px 4px rgba(0,0,0,0.10);}
+.subtitle{text-align:center;color:#EBC6A6;font-size:1.0rem;font-weight:700;margin-bottom:18px;text-transform:uppercase;letter-spacing:2px;}
+.stChatMessage{background-color:rgba(255,255,255,0.95)!important;border:1px solid #EBC6A6;border-radius:15px;padding:14px;box-shadow:0 4px 6px rgba(0,0,0,0.05);color:#1f1f1f !important;}
+.stChatMessage p,.stChatMessage li{color:#1f1f1f !important;line-height:1.6;}
+.stButton button{background:linear-gradient(90deg,#25D366 0%,#128C7E 100%);color:white !important;border:none;border-radius:25px;padding:12px 25px;font-weight:800;width:100%;text-transform:uppercase;}
+.stButton button:hover{transform: scale(1.02);}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
+st.markdown("<h1>Sarah</h1>", unsafe_allow_html=True)
+st.markdown("<div class='subtitle'>SVB</div>", unsafe_allow_html=True)
+
+# ------------------------------------------------------------------------------
+# 3) ON RÉCUPÈRE TOUT DE knowledge.py
+# ------------------------------------------------------------------------------
+CONTACT = K.CONTACT
+STUDIOS = K.STUDIOS
+UNIT_PRICE = K.UNIT_PRICE
+TRIAL = K.TRIAL
+STARTER = K.STARTER
+BOOST = K.BOOST
+FEES_AND_ENGAGEMENT = K.FEES_AND_ENGAGEMENT
+COACHING = K.COACHING
+PASS = K.PASS
+KIDS = K.KIDS
+RULES = K.RULES
+PARRAINAGE = K.PARRAINAGE
+DAY_ORDER = K.DAY_ORDER
+SLOTS = K.SLOTS
+DEFINITIONS = K.DEFINITIONS
+PASS_INCLUDES = K.PASS_INCLUDES
+
+# ==============================================================================
+# HELPERS
+# ==============================================================================
 def eur(x: float) -> str:
-    # ex: 60.3 -> "60,30€"
     s = f"{x:,.2f}".replace(",", " ").replace(".", ",")
     return f"{s}€"
-
-def strip_accents_cheap(s: str) -> str:
-    replacements = {
-        "é": "e", "è": "e", "ê": "e", "ë": "e",
-        "à": "a", "â": "a",
-        "î": "i", "ï": "i",
-        "ô": "o",
-        "ù": "u", "û": "u",
-        "ç": "c",
-        "’": "'", "“": '"', "”": '"',
-    }
-    for k, v in replacements.items():
-        s = s.replace(k, v)
-    return s
 
 def norm(s: str) -> str:
     return (s or "").strip().lower()
 
+def strip_accents_cheap(s: str) -> str:
+    repl = {"é":"e","è":"e","ê":"e","ë":"e","à":"a","â":"a","î":"i","ï":"i","ô":"o","ù":"u","û":"u","ç":"c","’":"'","“":'"',"”":'"'}
+    for k,v in repl.items():
+        s = s.replace(k,v)
+    return s
+
 def norm2(s: str) -> str:
     return strip_accents_cheap(norm(s))
 
-# -----------------------------------------------------------------------------
-# TARIFS — UNITÉ / ESSAI / STARTER / BOOST / FRAIS
-# -----------------------------------------------------------------------------
+def safe_finalize(text: str) -> str:
+    t = (text or "").strip()
+    if not t:
+        return t
+    words = norm2(t).split()
+    last = words[-1] if words else ""
+    if last in {"si","mais","car","donc","parce","parceque","alors"}:
+        return "Tu pensais à l’unité ou en abonnement (2/4/6/8/10/12 sessions) ? 🙂"
+    if re.search(r"[A-Za-zÀ-ÖØ-öø-ÿ0-9]$", t) and not re.search(r"[\.!\?…]$", t):
+        return t + " 🙂"
+    return t
 
-UNIT_PRICE = {
-    "training": 30.00,  # Boxe / Cross / Yoga / Danse / Stretch / Pilates sol
-    "machine": 50.00,   # Reformer / Crossformer
-}
+def wa_button():
+    st.markdown("---")
+    st.link_button(CONTACT["whatsapp_label"], CONTACT["whatsapp_url"])
 
-TRIAL = {"price": 30.00, "refund_if_signup": 15.00}
+def has_any(text: str, words: List[str]) -> bool:
+    t = norm2(text)
+    return any(w in t for w in words)
 
-STARTER = {
-    "price": 99.90,
-    "sessions": 5,
-    "duration": "1 mois",
-    "rule": "1 séance par discipline (pas 5 fois la même discipline).",
-}
-
-BOOST = {
-    "price": 9.90,
-    "includes": [
-        "Frais d’inscription offerts",
-        "1 essai gratuit / mois pour un proche (sous réserve de dispo)",
-        "Suspension abonnement sans préavis",
-    ],
-    "engagement_note": "L’option Boost peut modifier certaines conditions selon la formule.",
-}
-
-FEES_AND_ENGAGEMENT = {
-    "small_group_registration_fee": 49.00,
-    "small_group_engagement_months": 3,  # affiché sur la page Tarifs
-    "small_group_engagement_note": "La FAQ mentionne que certains abonnements mensuels peuvent être sur 3 ou 6 mois selon la formule.",
-    "kids_registration_fee": 29.00,
-    "kids_engagement_months": 4,
-    "coaching_engagement_months": 3,
-}
-
-# -----------------------------------------------------------------------------
-# PASSES (ABONNEMENTS) — STRUCTURÉS
-# -----------------------------------------------------------------------------
-
-@dataclass(frozen=True)
-class PassPrice:
-    sessions: int
-    total: float
-
-@dataclass(frozen=True)
-class PassConfig:
-    key: str
-    label: str
-    duration_min: int
-    where: str                 # docks / lavandieres / mixte
-    prices: Dict[int, PassPrice]
-    includes: List[str]        # résumé contenu (utile)
-    category: str              # "training" | "machine"
-
-PASS: Dict[str, PassConfig] = {}
-
-def add_pass(p: PassConfig) -> None:
-    PASS[p.key] = p
-
-# Machines
-add_pass(PassConfig(
-    key="reformer",
-    label="Pass Reformer",
-    duration_min=50,
-    where="lavandieres",
-    category="machine",
-    includes=["Pilates Reformer (machine)"],
-    prices={
-        2: PassPrice(2, 70.30),
-        4: PassPrice(4, 136.30),
-        6: PassPrice(6, 198.30),
-        8: PassPrice(8, 256.30),
-        10: PassPrice(10, 310.30),
-        12: PassPrice(12, 360.30),
-    },
-))
-
-add_pass(PassConfig(
-    key="crossformer",
-    label="Pass Crossformer",
-    duration_min=50,
-    where="lavandieres",
-    category="machine",
-    includes=["Pilates Crossformer (machine, + cardio / intense)"],
-    prices={
-        2: PassPrice(2, 78.30),
-        4: PassPrice(4, 152.30),
-        6: PassPrice(6, 222.30),
-        8: PassPrice(8, 288.30),
-        10: PassPrice(10, 350.30),
-        12: PassPrice(12, 408.30),
-    },
-))
-
-add_pass(PassConfig(
-    key="full_former",
-    label="Pass Full Former (Reformer + Crossformer)",
-    duration_min=50,
-    where="lavandieres",
-    category="machine",
-    includes=["Reformer", "Crossformer"],
-    prices={
-        2: PassPrice(2, 74.30),
-        4: PassPrice(4, 144.30),
-        6: PassPrice(6, 210.30),
-        8: PassPrice(8, 272.30),
-        10: PassPrice(10, 330.30),
-        12: PassPrice(12, 384.30),
-    },
-))
-
-# Training
-add_pass(PassConfig(
-    key="cross",
-    label="Pass Cross",
-    duration_min=55,
-    where="docks",
-    category="training",
-    includes=["Cross Training", "Hyrox", "Core", "Body", "Cross Yoga"],
-    prices={
-        2: PassPrice(2, 30.30),
-        4: PassPrice(4, 60.30),
-        6: PassPrice(6, 90.30),
-        8: PassPrice(8, 116.30),
-        10: PassPrice(10, 145.30),
-        12: PassPrice(12, 168.30),
-    },
-))
-
-add_pass(PassConfig(
-    key="focus",
-    label="Pass Focus",
-    duration_min=55,
-    where="mixte",
-    category="training",
-    includes=["Yoga", "Pilates sol", "Boxe", "Danse", "Stretch (Core & Stretch)"],
-    prices={
-        2: PassPrice(2, 36.30),
-        4: PassPrice(4, 72.30),
-        6: PassPrice(6, 105.30),
-        8: PassPrice(8, 136.30),
-        10: PassPrice(10, 165.30),
-        12: PassPrice(12, 192.30),
-    },
-))
-
-add_pass(PassConfig(
-    key="full",
-    label="Pass Full (Cross + Focus)",
-    duration_min=55,
-    where="mixte",
-    category="training",
-    includes=["Tout le Pass Cross + tout le Pass Focus"],
-    prices={
-        2: PassPrice(2, 40.30),
-        4: PassPrice(4, 80.30),
-        6: PassPrice(6, 115.30),
-        8: PassPrice(8, 150.30),
-        10: PassPrice(10, 180.30),
-        12: PassPrice(12, 210.30),
-    },
-))
-
-# Kids (si tu l'utilises)
-add_pass(PassConfig(
-    key="kids",
-    label="Pass Kids (hors juillet/août)",
-    duration_min=55,
-    where="docks",
-    category="training",
-    includes=["Training Kids", "Yoga Kids"],
-    prices={
-        2: PassPrice(2, 35.30),
-        4: PassPrice(4, 65.30),
-    },
-))
-
-KIDS = {"extra_session": 18.30, "note": "1 activité au choix"}
-
-# Coaching (prix connus)
-COACHING = {
-    "good_vibes": {"label": "Coaching Pass Good Vibes", "duration_min": 55, "prices": {4: 300.30, 8: 560.30}},
-    "duo": {"label": "Coaching Pass Duo", "duration_min": 55, "prices": {4: 400.60, 8: 720.60}, "per_person": {4: 200.30, 8: 360.30}},
-}
-
-# -----------------------------------------------------------------------------
-# RÈGLES (FAQ) — formulation "safe" et actionnable
-# -----------------------------------------------------------------------------
-
-RULES = {
-    "cancel_small_group": "Annulation : jusqu’à 1h avant le cours, sinon la séance est déduite.",
-    "cancel_private": "Annulation coaching : jusqu’à 24h avant, sinon la séance est déduite.",
-    "no_carry_over": "Les séances ne sont pas reportables au mois suivant.",
-    "late_policy": "Au-delà de 5 minutes de retard : accès refusé et séance déduite.",
-    "socks_lavandieres": "Reformer (Lavandières) : chaussettes antidérapantes obligatoires (en vente au studio).",
-    "suspension": "Suspension : possible. En cas d’absence de plus de 10 jours, préavis d’un mois requis (sauf Boost).",
-    "resiliation": "Résiliation : par e-mail, avec 1 mois de préavis (au-delà de la période d’engagement).",
-    "engagement": f"Engagement abonnements : {FEES_AND_ENGAGEMENT['small_group_engagement_months']} mois (voir Tarifs). " + FEES_AND_ENGAGEMENT["small_group_engagement_note"],
-}
-
-PARRAINAGE = (
-    "Offre de parrainage : parrainez un ami et recevez un cadeau 🎁 "
-    "Pour chaque nouveau membre qui s’inscrit grâce à vous, vous recevez un cadeau exclusif."
-)
-
-# -----------------------------------------------------------------------------
-# DÉFINITIONS (FAQ + wording simple)
-# -----------------------------------------------------------------------------
-
-DEFINITIONS: Dict[str, str] = {
-    "reformer": (
-        "Le **Reformer** = Pilates sur machine à ressorts. "
-        "Très efficace pour gainer, se tonifier et améliorer la posture (débutant OK)."
-    ),
-    "crossformer": (
-        "Le **Crossformer** = machine Pilates plus **cardio / intense**. "
-        "Top si tu veux te tonifier + transpirer + booster le cardio."
-    ),
-    "cross training": "Le **Cross Training** = cardio + renfo (full body) avec des formats variés.",
-    "cross core": "Le **Cross Core** cible surtout le gainage (abdos/dos) + stabilité.",
-    "cross body": "Le **Cross Body** travaille tout le corps (renfo + cardio) avec focus tonus.",
-    "cross rox": "Le **Cross Rox** = format plus intense/rythmé (cardio + renfo).",
-    "cross yoga": "Le **Cross Yoga** mélange mobilité + gainage + flow.",
-    "boxe": "La **Boxe** = cardio + technique + renfo (sans combat). Très efficace pour se défouler.",
-    "afrodance": "L’**Afrodance'All** = danse cardio, fun, énergie, transpiration garantie.",
-    "yoga vinyasa": "Le **Yoga Vinyasa** = enchaînements fluides, respiration, mobilité.",
-    "hatha flow": "Le **Hatha Flow** = yoga plus doux/contrôlé, idéal pour bien commencer.",
-    "classic pilates": "Le **Classic Pilates** = travail postural + gainage + mobilité (sans machine).",
-    "power pilates": "Le **Power Pilates** = Pilates plus dynamique/intense.",
-    "core & stretch": "Le **Core & Stretch** = gainage + étirements (parfait pour le dos et la mobilité).",
-    "small group": "Small Group = petit groupe, coaching plus personnalisé, corrections et adaptations.",
-    "coaching": "Coaching = séance personnalisée (individuel ou duo) selon ton objectif.",
-    "yoga kids": "Le **Yoga Kids** = yoga adapté aux enfants (mobilité, coordination, fun).",
-    "training kids": "Le **Training Kids** = sport adapté aux enfants (motricité, renfo, cardio).",
-}
-
-# -----------------------------------------------------------------------------
-# PLANNING — STRUCTURÉ
-# -----------------------------------------------------------------------------
-
-@dataclass(frozen=True)
-class ClassSlot:
-    studio: str   # docks / lavandieres
-    day: str      # lundi...
-    time: str     # "10h15"
-    name: str     # label
-    tag: str      # cross / focus / kids / reformer / crossformer
-
-def normalize_time(h: str) -> str:
-    # "08h" -> "8h", "10:15" -> "10h15"
-    h = norm(h).replace(" ", "").replace(":", "h")
-    h = re.sub(r"^0(\d)", r"\1", h)
-    return h
-
-def time_to_minutes(h: str) -> int:
-    h = normalize_time(h)
-    m = re.match(r"^(\d{1,2})h(\d{2})?$", h)
-    if not m:
-        return 0
-    hh = int(m.group(1))
-    mm = int(m.group(2) or "00")
-    return hh * 60 + mm
-
-SLOTS: List[ClassSlot] = []
-
-def add_slot(studio: str, day: str, time: str, name: str, tag: str) -> None:
-    SLOTS.append(ClassSlot(studio=studio, day=day, time=normalize_time(time), name=name, tag=tag))
-
-# --- DOCKS ---
-add_slot("docks", "lundi", "12h",   "Cross Training", "cross")
-add_slot("docks", "lundi", "13h",   "Cross Core", "cross")
-add_slot("docks", "lundi", "19h",   "Cross Training", "cross")
-add_slot("docks", "lundi", "20h",   "Cross Body", "cross")
-
-add_slot("docks", "mardi", "12h",   "Cross Rox", "cross")
-add_slot("docks", "mardi", "19h",   "Cross Body", "cross")
-add_slot("docks", "mardi", "20h",   "Cross Training", "cross")
-
-add_slot("docks", "mercredi", "12h", "Cross Training", "cross")
-add_slot("docks", "mercredi", "16h", "Yoga Kids", "kids")
-add_slot("docks", "mercredi", "19h", "Cross Training", "cross")
-add_slot("docks", "mercredi", "20h", "Boxe", "focus")
-
-add_slot("docks", "jeudi", "8h",    "Cross Core", "cross")
-add_slot("docks", "jeudi", "12h",   "Cross Body", "cross")
-add_slot("docks", "jeudi", "13h",   "Boxe", "focus")
-add_slot("docks", "jeudi", "18h",   "Cross Training", "cross")
-add_slot("docks", "jeudi", "19h",   "Afrodance'All", "focus")
-
-add_slot("docks", "vendredi", "18h", "Cross Rox", "cross")
-add_slot("docks", "vendredi", "19h", "Cross Training", "cross")
-
-add_slot("docks", "samedi", "9h30",  "Training Kids", "kids")
-add_slot("docks", "samedi", "10h30", "Cross Body", "cross")
-add_slot("docks", "samedi", "11h30", "Cross Training", "cross")
-
-add_slot("docks", "dimanche", "10h30", "Cross Training", "cross")
-add_slot("docks", "dimanche", "11h30", "Cross Yoga", "cross")
-
-# --- LAVANDIÈRES ---
-add_slot("lavandieres", "lundi", "12h",   "Cross-Former", "crossformer")
-add_slot("lavandieres", "lundi", "12h15", "Reformer", "reformer")
-add_slot("lavandieres", "lundi", "12h30", "Yoga Vinyasa", "focus")
-add_slot("lavandieres", "lundi", "18h45", "Cross-Former", "crossformer")
-add_slot("lavandieres", "lundi", "19h",   "Yoga Vinyasa", "focus")
-add_slot("lavandieres", "lundi", "19h15", "Reformer", "reformer")
-
-add_slot("lavandieres", "mardi", "7h30",  "Hatha Flow", "focus")
-add_slot("lavandieres", "mardi", "11h45", "Cross-Former", "crossformer")
-add_slot("lavandieres", "mardi", "12h",   "Power Pilates", "focus")
-add_slot("lavandieres", "mardi", "13h15", "Reformer", "reformer")
-add_slot("lavandieres", "mardi", "18h45", "Cross-Former", "crossformer")
-add_slot("lavandieres", "mardi", "19h15", "Reformer", "reformer")
-add_slot("lavandieres", "mardi", "20h",   "Power Pilates", "focus")
-
-add_slot("lavandieres", "mercredi", "10h15", "Cross-Former", "crossformer")
-add_slot("lavandieres", "mercredi", "12h",   "Reformer", "reformer")
-add_slot("lavandieres", "mercredi", "12h15", "Cross-Former", "crossformer")
-add_slot("lavandieres", "mercredi", "19h",   "Reformer", "reformer")
-add_slot("lavandieres", "mercredi", "19h15", "Cross-Former", "crossformer")
-add_slot("lavandieres", "mercredi", "20h",   "Reformer", "reformer")
-
-add_slot("lavandieres", "jeudi", "7h",    "Classic Pilates", "focus")
-add_slot("lavandieres", "jeudi", "12h",   "Yoga Vinyasa", "focus")
-add_slot("lavandieres", "jeudi", "12h15", "Cross-Former", "crossformer")
-add_slot("lavandieres", "jeudi", "12h30", "Reformer", "reformer")
-add_slot("lavandieres", "jeudi", "18h",   "Cross-Former", "crossformer")
-add_slot("lavandieres", "jeudi", "18h45", "Reformer", "reformer")
-add_slot("lavandieres", "jeudi", "19h15", "Power Pilates", "focus")
-add_slot("lavandieres", "jeudi", "20h15", "Cross Yoga", "cross")
-add_slot("lavandieres", "jeudi", "20h30", "Cross-Former", "crossformer")
-
-add_slot("lavandieres", "vendredi", "9h45",  "Cross-Former", "crossformer")
-add_slot("lavandieres", "vendredi", "10h45", "Cross-Former", "crossformer")
-add_slot("lavandieres", "vendredi", "12h",   "Reformer", "reformer")
-add_slot("lavandieres", "vendredi", "13h",   "Reformer", "reformer")
-add_slot("lavandieres", "vendredi", "18h",   "Classic Pilates", "focus")
-add_slot("lavandieres", "vendredi", "18h30", "Reformer", "reformer")
-add_slot("lavandieres", "vendredi", "19h15", "Cross-Former", "crossformer")
-
-# Samedi (site)
-add_slot("lavandieres", "samedi", "9h",    "Reformer", "reformer")
-add_slot("lavandieres", "samedi", "9h30",  "Cross-Former", "crossformer")
-add_slot("lavandieres", "samedi", "10h",   "Reformer", "reformer")
-add_slot("lavandieres", "samedi", "10h15", "Classic Pilates", "focus")
-add_slot("lavandieres", "samedi", "10h30", "Cross-Former", "crossformer")
-add_slot("lavandieres", "samedi", "11h15", "Core & Stretch", "focus")
-
-add_slot("lavandieres", "dimanche", "10h",   "Cross-Former", "crossformer")
-add_slot("lavandieres", "dimanche", "10h15", "Reformer", "reformer")
-add_slot("lavandieres", "dimanche", "11h",   "Cross-Former", "crossformer")
-add_slot("lavandieres", "dimanche", "11h15", "Reformer", "reformer")
-add_slot("lavandieres", "dimanche", "11h30", "Yoga Vinyasa", "focus")
-
-# -----------------------------------------------------------------------------
-# EXTRACTION (cours / pass / studio / jour / sessions)
-# -----------------------------------------------------------------------------
-
-PASS_ALIASES = [
-    ("full former", "full_former"),
-    ("fullformer", "full_former"),
-    ("pass full", "full"),
-    ("full", "full"),
-    ("pass focus", "focus"),
-    ("focus", "focus"),
-    ("pass cross", "cross"),
-    ("cross", "cross"),
-    ("pass reformer", "reformer"),
-    ("reformer", "reformer"),
-    ("pass crossformer", "crossformer"),
-    ("crossformer", "crossformer"),
-    ("kids", "kids"),
-    ("enfant", "kids"),
-]
-
-COURSE_ALIASES = {
-    "pilates reformer": "reformer",
-    "pilate reformer": "reformer",
-    "reformer": "reformer",
-
-    "pilates crossformer": "crossformer",
-    "pilate crossformer": "crossformer",
-    "crossformer": "crossformer",
-    "cross-former": "crossformer",
-    "cross former": "crossformer",
-
-    "boxe": "boxe",
-    "boxing": "boxe",
-
-    "afrodance": "afrodance",
-    "afrodance all": "afrodance",
-    "afrodance'all": "afrodance",
-
-    "cross training": "cross training",
-    "cross-training": "cross training",
-    "cross core": "cross core",
-    "cross-core": "cross core",
-    "cross body": "cross body",
-    "cross-body": "cross body",
-    "cross rox": "cross rox",
-    "cross-rox": "cross rox",
-    "cross yoga": "cross yoga",
-    "cross-yoga": "cross yoga",
-
-    "yoga vinyasa": "yoga vinyasa",
-    "vinyasa": "yoga vinyasa",
-    "hatha flow": "hatha flow",
-    "hatha": "hatha flow",
-    "classic pilates": "classic pilates",
-    "power pilates": "power pilates",
-    "core & stretch": "core & stretch",
-    "core and stretch": "core & stretch",
-    "stretch": "core & stretch",
-
-    "yoga kids": "yoga kids",
-    "training kids": "training kids",
-}
-
+# ==============================================================================
+# EXTRACTION
+# ==============================================================================
 def find_sessions_count(text: str) -> Optional[int]:
     m = re.search(r"\b(2|4|6|8|10|12)\b", norm2(text))
     return int(m.group(1)) if m else None
 
+def intent_sessions_only(text: str) -> bool:
+    return re.match(r"^\s*(2|4|6|8|10|12)\s*(seance|seances|séance|séances|session|sessions)?\s*$", text.strip(), re.I) is not None
+
 def find_pass_key(text: str) -> Optional[str]:
     t = norm2(text)
-    for needle, key in sorted(PASS_ALIASES, key=lambda x: len(x[0]), reverse=True):
+    patterns = [
+        ("full former","full_former"), ("fullformer","full_former"),
+        ("pass full","full"), ("pass focus","focus"), ("pass cross","cross"),
+        ("crossformer","crossformer"), ("reformer","reformer"),
+        ("kids","kids"), ("enfant","kids"),
+        ("full","full"), ("focus","focus"), ("cross","cross")
+    ]
+    for needle, key in patterns:
         if needle in t:
             return key
     return None
 
 def extract_course_key(text: str) -> Optional[str]:
     t = norm2(text)
-    for k in sorted(COURSE_ALIASES.keys(), key=len, reverse=True):
+    aliases = {
+        "pilates reformer":"reformer","pilate reformer":"reformer","reformer":"reformer",
+        "cross-former":"crossformer","cross former":"crossformer","crossformer":"crossformer",
+        "boxe":"boxe","boxing":"boxe","afrodance":"afrodance","afrodance all":"afrodance","afrodance'all":"afrodance",
+        "cross training":"cross training","cross core":"cross core","cross body":"cross body","cross rox":"cross rox","cross yoga":"cross yoga",
+        "yoga vinyasa":"yoga vinyasa","vinyasa":"yoga vinyasa",
+        "hatha flow":"hatha flow","hatha":"hatha flow",
+        "classic pilates":"classic pilates","power pilates":"power pilates",
+        "core & stretch":"core & stretch","core and stretch":"core & stretch","stretch":"core & stretch",
+        "yoga kids":"yoga kids","training kids":"training kids",
+    }
+    for k in sorted(aliases.keys(), key=len, reverse=True):
         if k in t:
-            return COURSE_ALIASES[k]
+            return aliases[k]
     return None
 
-def extract_day(text: str) -> Optional[str]:
-    t = norm2(text)
-    for d in DAY_ORDER:
-        if d in t:
-            return d
-    return None
+def canonical_to_course_name(ck: str) -> Optional[str]:
+    m = {
+        "reformer":"Reformer","crossformer":"Cross-Former",
+        "boxe":"Boxe","afrodance":"Afrodance'All",
+        "cross training":"Cross Training","cross core":"Cross Core","cross body":"Cross Body","cross rox":"Cross Rox","cross yoga":"Cross Yoga",
+        "yoga vinyasa":"Yoga Vinyasa","hatha flow":"Hatha Flow","classic pilates":"Classic Pilates","power pilates":"Power Pilates","core & stretch":"Core & Stretch",
+        "yoga kids":"Yoga Kids","training kids":"Training Kids",
+    }
+    return m.get(ck)
 
-def extract_studio(text: str) -> Optional[str]:
-    t = norm2(text)
-    if "dock" in t or "parc des docks" in t:
-        return "docks"
-    if "lavandi" in t or "cours lavandieres" in t:
-        return "lavandieres"
+def infer_pass_from_course(ck: Optional[str]) -> Optional[str]:
+    if not ck:
+        return None
+    cname = canonical_to_course_name(ck)
+    if not cname:
+        return None
+    for pk, courses in PASS_INCLUDES.items():
+        if cname in courses:
+            return pk
     return None
 
 def pass_unit_price(pass_key: str, sessions: int) -> Optional[float]:
     p = PASS.get(pass_key)
     if not p or sessions not in p.prices:
         return None
+    return round(p.prices[sessions].total / sessions, 2)
+
+# ==============================================================================
+# STATE (mémoire courte)
+# ==============================================================================
+def ensure_state():
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    if "did_greet" not in st.session_state:
+        st.session_state.did_greet = False
+    if "profile" not in st.session_state:
+        st.session_state.profile = {"course": None, "pass_key": None, "sessions": None}
+
+def update_profile(text: str):
+    p = st.session_state.profile
+    ck = extract_course_key(text)
+    if ck:
+        p["course"] = ck
+    pk = find_pass_key(text)
+    if pk:
+        p["pass_key"] = pk
+    n = find_sessions_count(text)
+    if n:
+        p["sessions"] = n
+
+def first_message() -> str:
+    return random.choice([
+        "Salut 🙂 Tu cherches plutôt Machines (Reformer/Crossformer) ou Training (Cross/Boxe/Yoga) ?",
+        "Hello 🙂 Dis-moi ton objectif (tonus, cardio, dos, mobilité…) et je te guide.",
+    ])
+
+ensure_state()
+if not st.session_state.did_greet and len(st.session_state.messages) == 0:
+    st.session_state.messages.append({"role": "assistant", "content": first_message()})
+    st.session_state.did_greet = True
+
+# ==============================================================================
+# INTENTS
+# ==============================================================================
+def intent_price(text: str) -> bool:
+    return has_any(text, ["tarif","prix","combien","coute","coûte","abonnement","forfait","mensuel","mois"])
+
+def intent_unit_price(text: str) -> bool:
+    return has_any(text, ["a l'unite","à l'unité","sans abonnement","sans abo","unité","unite"])
+
+def intent_definition(text: str) -> bool:
+    return has_any(text, ["c'est quoi","c quoi","definition","définition","explique","différence","difference"])
+
+def intent_signup(text: str) -> bool:
+    return has_any(text, ["m'inscrire","inscription","creer un compte","créer un compte","identifiant","connexion","appli","application","sportigo"])
+
+# ==============================================================================
+# RÉPONSES
+# ==============================================================================
+def answer_signup() -> str:
+    return safe_finalize(
+        "Pour t’inscrire :\n\n"
+        "1) Tu souscris ton abonnement en ligne.\n"
+        "2) Après le paiement, tu reçois automatiquement un e-mail avec tes identifiants.\n"
+        "3) Tu télécharges l’application (SVB / Sportigo).\n"
+        "4) Tu rentres les identifiants reçus par e-mail.\n"
+        "5) Ensuite tu réserves tes séances ✅\n\n"
+        "Si tu ne reçois pas l’e-mail (spam / délai), écris-nous sur WhatsApp."
+    )
+
+def answer_definition(text: str) -> Optional[str]:
+    ck = extract_course_key(text)
+    if ck and ck in DEFINITIONS:
+        return safe_finalize(DEFINITIONS[ck])
+    return None
+
+def answer_unit_price(text: str) -> str:
+    ck = extract_course_key(text)
+    if ck in ("reformer","crossformer"):
+        return safe_finalize(f"Sans abonnement, une séance **Machine** est à **{eur(UNIT_PRICE['machine'])}**.")
+    return safe_finalize(f"Sans abonnement, une séance **Training / cours** est à **{eur(UNIT_PRICE['training'])}**.")
+
+def answer_pass_price(pass_key: str, sessions: int) -> Optional[str]:
+    p = PASS.get(pass_key)
+    if not p or sessions not in p.prices:
+        return None
     total = p.prices[sessions].total
-    return round(total / sessions, 2)
+    unit = pass_unit_price(pass_key, sessions)
+    extra = ""
+    if pass_key == "kids":
+        extra = f"\n- Séance supplémentaire kids : **{eur(KIDS['extra_session'])}**"
+    studio_txt = STUDIOS[p.where]["label"] if p.where in STUDIOS else p.where
+    return safe_finalize(
+        f"📌 **{p.label}** — {sessions} sessions / mois\n"
+        f"- Total : **{eur(total)}**\n"
+        f"- Prix / séance : **{eur(unit)}**\n"
+        f"- Durée : {p.duration_min} min\n"
+        f"- Studio : {studio_txt}"
+        f"{extra}"
+    )
 
-# -----------------------------------------------------------------------------
-# PLANNING HELPERS
-# -----------------------------------------------------------------------------
+def answer_ask_sessions(ck: str) -> str:
+    if ck in ("reformer","crossformer"):
+        return safe_finalize("Tu veux **à l’unité** ou en abonnement : **2/4/6/8/10/12 sessions** par mois ?")
+    return safe_finalize("Tu veux combien de sessions par mois : **2/4/6/8/10/12** ?")
 
-def slots_for(studio: Optional[str] = None, day: Optional[str] = None, course_key: Optional[str] = None) -> List[ClassSlot]:
-    out: List[ClassSlot] = []
-    for s in SLOTS:
-        if studio and s.studio != studio:
-            continue
-        if day and s.day != day:
-            continue
-        if course_key:
-            ck = norm2(course_key)
-            nm = norm2(s.name)
+def deterministic_router(user_text: str) -> Tuple[Optional[str], bool]:
+    prof = st.session_state.profile
 
-            if ck == "reformer" and "reformer" not in nm:
-                continue
-            if ck == "crossformer" and ("cross" not in nm or "former" not in nm):
-                continue
-            if ck == "boxe" and "boxe" not in nm:
-                continue
-            if ck == "afrodance" and "afrodance" not in nm:
-                continue
-            if ck == "cross training" and "cross training" not in nm:
-                continue
-            if ck == "cross core" and "cross core" not in nm:
-                continue
-            if ck == "cross body" and "cross body" not in nm:
-                continue
-            if ck == "cross rox" and "cross rox" not in nm:
-                continue
-            if ck == "cross yoga" and "cross yoga" not in nm:
-                continue
-            if ck == "yoga vinyasa" and "vinyasa" not in nm:
-                continue
-            if ck == "hatha flow" and "hatha" not in nm:
-                continue
-            if ck == "classic pilates" and "classic" not in nm:
-                continue
-            if ck == "power pilates" and "power" not in nm:
-                continue
-            if ck == "core & stretch" and "stretch" not in nm:
-                continue
-            if ck == "yoga kids" and ("kids" not in nm or "yoga" not in nm):
-                continue
-            if ck == "training kids" and ("kids" not in nm or "training" not in nm):
-                continue
+    if intent_signup(user_text):
+        return answer_signup(), True
 
-        out.append(s)
-    return out
+    if intent_definition(user_text):
+        d = answer_definition(user_text)
+        if d:
+            return d, False
 
-def tag_to_pass_hint(tag: str) -> str:
-    if tag == "cross":
-        return "Pass Cross (ou Pass Full)"
-    if tag == "focus":
-        return "Pass Focus (ou Pass Full)"
-    if tag == "reformer":
-        return "Pass Reformer (ou Pass Full Former)"
-    if tag == "crossformer":
-        return "Pass Crossformer (ou Pass Full Former)"
-    if tag == "kids":
-        return "Pass Kids"
-    return "selon la formule"
+    # ✅ réponse courte “4 session”
+    if intent_sessions_only(user_text):
+        n = find_sessions_count(user_text) or prof.get("sessions")
+        pk = prof.get("pass_key") or infer_pass_from_course(prof.get("course"))
+        if pk and n:
+            out = answer_pass_price(pk, int(n))
+            if out:
+                return out, False
+        return safe_finalize("OK 🙂 Tu parles de quel pass ? (Cross / Focus / Full / Reformer / Crossformer / Full Former)"), False
 
-def format_slots_grouped(slots: List[ClassSlot]) -> str:
-    by_day: Dict[str, List[ClassSlot]] = {d: [] for d in DAY_ORDER}
-    for s in slots:
-        by_day[s.day].append(s)
+    if intent_unit_price(user_text):
+        return answer_unit_price(user_text), False
 
-    lines: List[str] = []
-    for d in DAY_ORDER:
-        items = by_day[d]
-        if not items:
-            continue
-        items_sorted = sorted(items, key=lambda z: time_to_minutes(z.time))
-        times = ", ".join([f"{x.time} ({x.name})" for x in items_sorted])
-        lines.append(f"- **{d.capitalize()}** : {times}")
-    return "\n".join(lines) if lines else "Je n’ai rien trouvé sur le planning actuel."
+    if intent_price(user_text):
+        ck = extract_course_key(user_text)
+        if ck and not find_sessions_count(user_text) and not find_pass_key(user_text) and not intent_unit_price(user_text):
+            return answer_ask_sessions(ck), False
+
+        pk = find_pass_key(user_text) or prof.get("pass_key") or infer_pass_from_course(extract_course_key(user_text) or prof.get("course"))
+        n = find_sessions_count(user_text) or prof.get("sessions")
+        if pk and n:
+            out = answer_pass_price(pk, int(n))
+            if out:
+                return out, False
+
+    return None, False
+
+# ==============================================================================
+# GEMINI fallback (optionnel)
+# ==============================================================================
+def get_api_key() -> Optional[str]:
+    try:
+        if "GOOGLE_API_KEY" in st.secrets:
+            return st.secrets["GOOGLE_API_KEY"]
+    except Exception:
+        pass
+    return os.getenv("GOOGLE_API_KEY")
+
+@st.cache_resource
+def get_model(api_key: str):
+    genai.configure(api_key=api_key)
+    return genai.GenerativeModel("gemini-2.5-flash")
+
+SYSTEM_PROMPT = """
+Tu fais partie de l’équipe SVB.
+Tu ne dis jamais “Bienvenue…”.
+Tu n’inventes aucun prix/horaires/règles.
+Tu finis toujours avec une phrase complète.
+""".strip()
+
+def sanitize_llm(text: str) -> str:
+    t = (text or "").strip()
+    t2 = norm2(t)
+    if t2.startswith("bienvenue") or ("bienvenue" in t2[:40] and t2.startswith("hello")):
+        t = re.sub(r"(?i)^.*?(\?\s*)", "", t).strip()
+    return safe_finalize(t)
+
+def call_gemini(api_key: str, history: List[Dict[str, str]]) -> Tuple[str, bool]:
+    model = get_model(api_key)
+    contents: List[Dict[str, Any]] = [{"role": "user", "parts": [{"text": SYSTEM_PROMPT}]}]
+    for msg in history[-18:]:
+        role = "user" if msg["role"] == "user" else "model"
+        contents.append({"role": role, "parts": [{"text": msg["content"]}]})
+    resp = model.generate_content(contents, generation_config={"temperature": 0.35, "top_p": 0.9, "max_output_tokens": 220})
+    txt = sanitize_llm(resp.text or "")
+    if not txt:
+        txt = "Tu cherches plutôt Machines (Reformer/Crossformer) ou Training (Cross/Boxe/Yoga) ? 🙂"
+    return txt, ("whatsapp" in norm2(txt))
+
+# ==============================================================================
+# UI
+# ==============================================================================
+with st.sidebar:
+    st.markdown("### SVB • Infos")
+    st.caption(f"WhatsApp : {CONTACT['phone']}")
+    st.caption(f"Email : {CONTACT['email']}")
+    st.caption(f"Instagram : {CONTACT['instagram']}")
+
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+api_key = get_api_key()
+prompt = st.chat_input("Posez votre question...")
+
+if prompt:
+    update_profile(prompt)
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    det, needs_wa = deterministic_router(prompt)
+
+    if det is not None:
+        with st.chat_message("assistant"):
+            st.markdown(det)
+        st.session_state.messages.append({"role": "assistant", "content": det})
+        if needs_wa:
+            wa_button()
+    else:
+        if not GEMINI_AVAILABLE or not api_key:
+            txt = safe_finalize("Dis-moi juste : quel cours + combien de sessions (2/4/6/8/10/12) et je te calcule 🙂")
+            with st.chat_message("assistant"):
+                st.markdown(txt)
+            st.session_state.messages.append({"role": "assistant", "content": txt})
+        else:
+            try:
+                with st.chat_message("assistant"):
+                    with st.spinner("..."):
+                        txt, needs_wa2 = call_gemini(api_key, st.session_state.messages)
+                    st.markdown(txt)
+                st.session_state.messages.append({"role": "assistant", "content": txt})
+                if needs_wa2:
+                    wa_button()
+            except Exception:
+                log.exception("Erreur Gemini")
+                txt = safe_finalize("Petit souci technique. Le plus simple : WhatsApp 🙂")
+                with st.chat_message("assistant"):
+                    st.markdown(txt)
+                st.session_state.messages.append({"role": "assistant", "content": txt})
+                wa_button()
