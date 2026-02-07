@@ -1,21 +1,28 @@
 # ==============================================================================
-# SARAH — SVB CHATBOT — VERSION ULTIME (INTELLIGENTE & ROBUSTE)
+# SARAH — SVB CHATBOT — VERSION INTELLIGENTE & ROBUSTE (CORRIGÉE)
 # ==============================================================================
 
 import os
 import re
 import random
 import logging
+import datetime
+import locale
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Any
 
 import streamlit as st
 
 # ------------------------------------------------------------------------------
-# 0) LOGGING & SETUP
+# 0) CONFIGURATION
 # ------------------------------------------------------------------------------
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("SVB_SARAH")
+
+try:
+    locale.setlocale(locale.LC_TIME, 'fr_FR.UTF-8')
+except:
+    pass
 
 try:
     import google.generativeai as genai
@@ -23,491 +30,249 @@ try:
 except ImportError:
     GEMINI_AVAILABLE = False
 
-# ------------------------------------------------------------------------------
-# 1) PAGE CONFIG
-# ------------------------------------------------------------------------------
 st.set_page_config(page_title="Sarah - SVB", page_icon="🧡", layout="centered")
 
 # ------------------------------------------------------------------------------
-# 2) CSS (DESIGN & VISIBILITÉ)
+# 1) ESTHÉTIQUE
 # ------------------------------------------------------------------------------
-st.markdown(
-    """
+st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Lato:wght@400;700&display=swap');
-
-.stApp{
-  background: linear-gradient(180deg, #F9F7F2 0%, #E6F0E6 100%);
-  font-family:'Lato',sans-serif;
-  color:#000000 !important;
-}
-#MainMenu, footer, header {visibility:hidden;}
-
-h1{
-  font-family:'Dancing Script',cursive;
-  color:#8FB592;
-  text-align:center;
-  font-size:3.4rem !important;
-  margin-bottom:0px !important;
-  text-shadow:2px 2px 4px rgba(0,0,0,0.10);
-}
-.subtitle{
-  text-align:center;
-  color:#EBC6A6;
-  font-size:1.0rem;
-  font-weight:700;
-  margin-bottom:18px;
-  text-transform:uppercase;
-  letter-spacing:2px;
-}
-.stChatMessage{
-  background-color: #ffffff !important;
-  border: 1px solid #EBC6A6;
-  border-radius: 15px;
-  padding: 14px;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-}
-.stChatMessage p, .stChatMessage div, .stChatMessage span, .stChatMessage li {
-  color: #000000 !important;
-  line-height: 1.6;
-}
-.stButton button{
-  background: linear-gradient(90deg, #25D366 0%, #128C7E 100%);
-  color:white !important;
-  border:none;
-  border-radius:25px;
-  padding:12px 25px;
-  font-weight:800;
-  width:100%;
-  text-transform:uppercase;
-}
-.stButton button:hover{ transform: scale(1.02); }
+.stApp { background: linear-gradient(180deg, #F9F7F2 0%, #E6F0E6 100%); font-family:'Lato',sans-serif; color:#000000 !important; }
+h1 { font-family:'Dancing Script',cursive; color:#8FB592; text-align:center; font-size:3.4rem !important; margin-bottom:0px !important; text-shadow:2px 2px 4px rgba(0,0,0,0.10); }
+.subtitle { text-align:center; color:#EBC6A6; font-size:1.0rem; font-weight:700; margin-bottom:18px; text-transform:uppercase; letter-spacing:2px; }
+.stChatMessage { background-color: #ffffff !important; border: 1px solid #EBC6A6; border-radius: 15px; padding: 14px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+.stChatMessage p, .stChatMessage li, .stChatMessage span, .stChatMessage div, .stChatMessage h1, .stChatMessage h2, .stChatMessage h3, .stChatMessage strong { color: #000000 !important; line-height: 1.6; }
+.stButton button { background: linear-gradient(90deg, #25D366 0%, #128C7E 100%); color:white !important; border:none; border-radius:25px; padding:12px 25px; font-weight:800; width:100%; text-transform:uppercase; }
+.stButton button:hover { transform: scale(1.02); }
 </style>
-""",
-    unsafe_allow_html=True,
-)
+""", unsafe_allow_html=True)
 
-# ------------------------------------------------------------------------------
-# 3) HEADER
-# ------------------------------------------------------------------------------
 st.markdown("<h1>Sarah</h1>", unsafe_allow_html=True)
-st.markdown("<div class='subtitle'>SVB</div>", unsafe_allow_html=True)
+st.markdown("<div class='subtitle'>SVB • SANTEZ-VOUS BIEN</div>", unsafe_allow_html=True)
 
 # ==============================================================================
-# 4) DATA (SOURCE DE VÉRITÉ)
+# 2) BASE DE DONNÉES (VÉRITÉ)
 # ==============================================================================
 
-CONTACT = {
-    "whatsapp_url": "https://wa.me/33744919155",
-    "whatsapp_label": "📞 Contacter l'équipe (WhatsApp)",
-}
+CONTACT = {"whatsapp": "https://wa.me/33744919155", "email": "hello@studiosvb.fr", "phone": "07 44 91 91 55"}
 
-STUDIOS = {
-    "docks": {"label": "Parc des Docks", "address": "6 Mail André Breton, St-Ouen"},
-    "lavandieres": {"label": "Cours Lavandières", "address": "40 Cours des Lavandières, St-Ouen"},
-}
-
-UNIT_PRICE = {"training": 30.00, "machine": 50.00}
-TRIAL = {"price": 30.00, "refund_if_signup": 15.00}
-STARTER = {"price": 99.90, "sessions": 5, "duration": "1 mois"}
-BOOST = {"price": 9.90}
-FEES = {"registration": 49.00}
-KIDS_EXTRA = 18.30
-
-# --- STRUCTURE DES PASS ---
-@dataclass(frozen=True)
-class PassPrice:
-    sessions: int
-    total: float
-
-@dataclass(frozen=True)
-class PassConfig:
-    key: str
-    label: str
-    duration_min: int
-    prices: Dict[int, PassPrice]
-    where: str
-
-PASS: Dict[str, PassConfig] = {}
-
-def add_pass(p: PassConfig):
-    PASS[p.key] = p
-
-add_pass(PassConfig("crossformer", "Pass Crossformer", 50, {2: PassPrice(2, 78.30), 4: PassPrice(4, 152.30), 6: PassPrice(6, 222.30), 8: PassPrice(8, 288.30), 10: PassPrice(10, 350.30), 12: PassPrice(12, 408.30)}, "lavandieres"))
-add_pass(PassConfig("reformer", "Pass Reformer", 50, {2: PassPrice(2, 70.30), 4: PassPrice(4, 136.30), 6: PassPrice(6, 198.30), 8: PassPrice(8, 256.30), 10: PassPrice(10, 310.30), 12: PassPrice(12, 360.30)}, "lavandieres"))
-add_pass(PassConfig("full_former", "Pass Full Former", 50, {2: PassPrice(2, 74.30), 4: PassPrice(4, 144.30), 6: PassPrice(6, 210.30), 8: PassPrice(8, 272.30), 10: PassPrice(10, 330.30), 12: PassPrice(12, 384.30)}, "lavandieres"))
-add_pass(PassConfig("cross", "Pass Cross", 55, {2: PassPrice(2, 30.30), 4: PassPrice(4, 60.30), 6: PassPrice(6, 90.30), 8: PassPrice(8, 116.30), 10: PassPrice(10, 145.30), 12: PassPrice(12, 168.30)}, "docks"))
-add_pass(PassConfig("focus", "Pass Focus", 55, {2: PassPrice(2, 36.30), 4: PassPrice(4, 72.30), 6: PassPrice(6, 105.30), 8: PassPrice(8, 136.30), 10: PassPrice(10, 165.30), 12: PassPrice(12, 192.30)}, "mixte"))
-add_pass(PassConfig("full", "Pass Full", 55, {2: PassPrice(2, 40.30), 4: PassPrice(4, 80.30), 6: PassPrice(6, 115.30), 8: PassPrice(8, 150.30), 10: PassPrice(10, 180.30), 12: PassPrice(12, 210.30)}, "mixte"))
-add_pass(PassConfig("kids", "Pass Kids", 55, {2: PassPrice(2, 35.30), 4: PassPrice(4, 65.30)}, "docks"))
-
-# --- PLANNING RÉEL ---
-PLANNING_DATA = {
-    "docks": {
-        "lundi": [("12h", "Cross Training", "cross"), ("13h", "Cross Core", "cross"), ("19h", "Cross Training", "cross"), ("20h", "Cross Body", "cross")],
-        "mardi": [("12h", "Cross Rox", "cross"), ("19h", "Cross Body", "cross"), ("20h", "Cross Training", "cross")],
-        "mercredi": [("12h", "Cross Training", "cross"), ("16h", "Yoga Kids", "kids"), ("19h", "Cross Training", "cross"), ("20h", "Boxe", "focus")],
-        "jeudi": [("08h", "Cross Core", "cross"), ("12h", "Cross Body", "cross"), ("13h", "Boxe", "focus"), ("18h", "Cross Training", "cross"), ("19h", "Afrodance", "focus")],
-        "vendredi": [("18h", "Cross Rox", "cross"), ("19h", "Cross Training", "cross")],
-        "samedi": [("09h30", "Training Kids", "kids"), ("10h30", "Cross Body", "cross"), ("11h30", "Cross Training", "cross")],
-        "dimanche": [("10h30", "Cross Training", "cross"), ("11h30", "Cross Yoga", "cross")]
-    },
-    "lavandieres": {
-        "lundi": [("12h", "Crossformer", "crossformer"), ("12h15", "Reformer", "reformer"), ("12h30", "Yoga Vinyasa", "focus"), ("18h45", "Crossformer", "crossformer"), ("19h", "Yoga Vinyasa", "focus"), ("19h15", "Reformer", "reformer")],
-        "mardi": [("07h30", "Hatha Flow", "focus"), ("11h45", "Crossformer", "crossformer"), ("12h", "Power Pilates", "focus"), ("13h15", "Reformer", "reformer"), ("18h45", "Crossformer", "crossformer"), ("19h15", "Reformer", "reformer"), ("20h", "Power Pilates", "focus")],
-        "mercredi": [("10h15", "Crossformer", "crossformer"), ("12h", "Reformer", "reformer"), ("12h15", "Crossformer", "crossformer"), ("19h", "Reformer", "reformer"), ("19h15", "Crossformer", "crossformer"), ("20h", "Reformer", "reformer")],
-        "jeudi": [("07h", "Classic Pilates", "focus"), ("12h", "Yoga Vinyasa", "focus"), ("12h15", "Crossformer", "crossformer"), ("12h30", "Reformer", "reformer"), ("18h", "Crossformer", "crossformer"), ("18h45", "Reformer", "reformer"), ("19h15", "Power Pilates", "focus"), ("20h15", "Cross Yoga", "cross"), ("20h30", "Cross Forme", "crossformer")],
-        "vendredi": [("09h45", "Crossformer", "crossformer"), ("10h45", "Crossformer", "crossformer"), ("12h", "Reformer", "reformer"), ("13h", "Reformer", "reformer"), ("18h", "Classic Pilates", "focus"), ("18h30", "Reformer", "reformer"), ("19h15", "Crossformer", "crossformer")],
-        "samedi": [("09h", "Reformer", "reformer"), ("09h30", "Crossformer", "crossformer"), ("10h", "Reformer", "reformer"), ("10h15", "Classic Pilates", "focus"), ("10h30", "Crossformer", "crossformer"), ("11h15", "Core & Stretch", "focus")],
-        "dimanche": [("10h", "Crossformer", "crossformer"), ("10h15", "Reformer", "reformer"), ("11h", "Crossformer", "crossformer"), ("11h15", "Reformer", "reformer"), ("11h30", "Yoga Vinyasa", "focus")]
+PRICING_DB = {
+    "unit_training": 30.00, "unit_machine": 50.00, "trial": 30.00, "starter": 99.90, "boost": 9.90, "kids_extra": 18.30,
+    "passes": {
+        "cross": {4: 60.30, 8: 116.30, 12: 168.30},
+        "focus": {4: 72.30, 8: 136.30, 12: 192.30},
+        "full": {4: 80.30, 8: 150.30, 12: 210.30},
+        "reformer": {4: 136.30, 8: 256.30, 12: 360.30},
+        "crossformer": {4: 152.30, 8: 288.30, 12: 408.30},
+        "full_former": {4: 144.30, 8: 272.30, 12: 384.30},
+        "kids": {2: 35.30, 4: 65.30}
     }
 }
-DAY_ORDER = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+
+PLANNING_DB = {
+    "docks": {
+        "lundi": ["12h Cross Training", "13h Cross Core", "19h Cross Training", "20h Cross Body"],
+        "mardi": ["12h Cross Rox", "19h Cross Body", "20h Cross Training"],
+        "mercredi": ["12h Cross Training", "16h Yoga Kids", "19h Cross Training", "20h Boxe"],
+        "jeudi": ["08h Cross Core", "12h Cross Body", "13h Boxe", "18h Cross Training", "19h Afrodance"],
+        "vendredi": ["18h Cross Rox", "19h Cross Training"],
+        "samedi": ["09h30 Training Kids", "10h30 Cross Body", "11h30 Cross Training"],
+        "dimanche": ["10h30 Cross Training", "11h30 Cross Yoga"]
+    },
+    "lavandieres": {
+        "lundi": ["12h Crossformer", "12h15 Reformer", "12h30 Yoga Vinyasa", "18h45 Crossformer", "19h Yoga Vinyasa", "19h15 Reformer"],
+        "mardi": ["07h30 Hatha Flow", "11h45 Crossformer", "12h Power Pilates", "13h15 Reformer", "18h45 Crossformer", "19h15 Reformer", "20h Power Pilates"],
+        "mercredi": ["10h15 Crossformer", "12h Reformer", "12h15 Crossformer", "19h Reformer", "19h15 Crossformer", "20h Reformer"],
+        "jeudi": ["07h Classic Pilates", "12h Yoga Vinyasa", "12h15 Crossformer", "12h30 Reformer", "18h Crossformer", "18h45 Reformer", "19h15 Power Pilates", "20h15 Cross Yoga", "20h30 Cross Forme"],
+        "vendredi": ["09h45 Crossformer", "10h45 Crossformer", "12h Reformer", "13h Reformer", "18h Classic Pilates", "18h30 Reformer", "19h15 Crossformer"],
+        "samedi": ["09h Reformer", "09h30 Crossformer", "10h Reformer", "10h15 Classic Pilates", "10h30 Crossformer", "11h15 Core & Stretch"],
+        "dimanche": ["10h Crossformer", "10h15 Reformer", "11h Crossformer", "11h15 Reformer", "11h30 Yoga Vinyasa"]
+    }
+}
+
+FAQ_DB = {
+    "parking": "🚗 **Stationnement** :\n- **Docks** : Le parking des Docks est souvent complet. Privilégie les rues adjacentes ou le parking souterrain de la Mairie.\n- **Lavandières** : Il y a un parking public juste en face du studio.",
+    "douche": "🚿 **Douches & Vestiaires** :\nOui, nos deux studios sont équipés de douches individuelles, de casiers sécurisés et de sèche-cheveux. Tout le confort est là !",
+    "tenue": "👟 **Tenue** :\n- **Training (Docks)** : Baskets propres obligatoires.\n- **Machines (Lavandières)** : Chaussettes antidérapantes **OBLIGATOIRES** (en vente sur place 10€ si oubli).",
+    "retard": "⏱️ **Politique de Retard** :\nPour la sécurité, **nous n'acceptons aucun retard** au-delà de 5 minutes. La porte sera fermée.",
+    "contact_humain": "📞 **Besoin d'un humain ?**\nLe plus simple est d'écrire à l'équipe sur WhatsApp : " + CONTACT['whatsapp']
+}
+
+RULES = {
+    "suspension_policy": "🛑 **Mettre en pause l'abonnement** :\n1. Avec l'Option Boost : Suspension libre, sans préavis et sans justificatif.\n2. Sans Option Boost : Suspension possible uniquement si absence > 10 jours et préavis d'1 mois."
+}
 
 # ==============================================================================
-# 5) UTILS
+# 3) MOTEUR INTELLIGENT
 # ==============================================================================
+
+def normalize(text: str) -> str:
+    text = text.lower()
+    text = text.replace("é", "e").replace("è", "e").replace("à", "a").replace("ê", "e").replace("ù", "u")
+    return text
 
 def eur(val: float) -> str:
     return f"{val:,.2f}€".replace(",", " ").replace(".", ",")
 
-def norm(text: str) -> str:
-    return (text or "").strip().lower()
+def get_current_day() -> str:
+    days = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+    return days[datetime.datetime.now().weekday()]
 
-def find_sessions(text: str) -> Optional[int]:
-    m = re.search(r"\b(2|4|6|8|10|12)\b", norm(text))
-    return int(m.group(1)) if m else None
+def detect_pass_info(text: str) -> Tuple[Optional[str], Optional[int]]:
+    t = normalize(text)
+    pass_key = None
+    # Détection souple (y compris "pilate" ou "pialte" pour reformer)
+    if "crossformer" in t: pass_key = "crossformer"
+    elif "reformer" in t or "pilate" in t or "pialte" in t: pass_key = "reformer"
+    elif "full" in t: pass_key = "full" if "former" not in t else "full_former"
+    elif "focus" in t: pass_key = "focus"
+    elif "cross" in t: pass_key = "cross"
+    elif "kid" in t or "enfant" in t: pass_key = "kids"
+    
+    sessions = None
+    match = re.search(r"\b(2|4|6|8|10|12)\b", t)
+    if match: sessions = int(match.group(1))
+    
+    return pass_key, sessions
 
-def find_pass_key(text: str) -> Optional[str]:
-    t = norm(text)
-    mapping = [("full former", "full_former"), ("fullformer", "full_former"), ("crossformer", "crossformer"), ("reformer", "reformer"), ("cross", "cross"), ("focus", "focus"), ("full", "full"), ("kids", "kids"), ("enfant", "kids")]
-    for k_txt, k_key in mapping:
-        if k_txt in t: return k_key
-    return None
+def get_pricing_response(text: str) -> str:
+    t = normalize(text)
+    
+    if "boxe" in t:
+        return (f"🥊 **Tarif Boxe** :\n"
+                f"- À l'unité : **{eur(PRICING_DB['unit_training'])}**\n"
+                f"- En abonnement : Inclus dans les Pass Cross et Full. Le prix revient au prorata (ex: Pass Cross 4 = 15€/séance).")
+    
+    if "starter" in t: return f"⭐ **Offre Starter** : {eur(PRICING_DB['starter'])} pour 5 sessions (valable 1 mois)."
+    if "essai" in t: return f"🎟️ **Séance d'essai** : {eur(PRICING_DB['trial'])} (15€ remboursés si inscription !)."
+    
+    pass_key, sessions = detect_pass_info(text)
+    
+    if pass_key:
+        if pass_key == "kids": return f"👶 **Pass Kids** : 2 séances = {eur(PRICING_DB['passes']['kids'][2])} | 4 séances = {eur(PRICING_DB['passes']['kids'][4])}."
+        
+        # Si nombre détecté
+        if sessions and sessions in PRICING_DB['passes'].get(pass_key, {}):
+            total = PRICING_DB['passes'][pass_key][sessions]
+            unit = total / sessions
+            return f"🏷️ **Pass {pass_key.capitalize()} {sessions} sessions** : **{eur(total)}** / mois (soit {eur(unit)}/séance)."
+        
+        # Si PAS de nombre détecté -> On affiche TOUT
+        prices = PRICING_DB['passes'].get(pass_key)
+        if prices:
+            lines = [f"📋 **Tarifs Pass {pass_key.capitalize()}** :"]
+            for k, v in prices.items():
+                lines.append(f"- {k} sessions : **{eur(v)}**")
+            return "\n".join(lines)
 
-def detect_studio(text: str) -> Optional[str]:
-    t = norm(text)
-    if "dock" in t: return "docks"
-    if "lavandi" in t: return "lavandieres"
-    return None
-
-def detect_day(text: str) -> Optional[str]:
-    t = norm(text)
-    for d in DAY_ORDER:
-        if d in t: return d
-    return None
-
-def get_api_key() -> Optional[str]:
-    try:
-        return st.secrets["GOOGLE_API_KEY"]
-    except (KeyError, FileNotFoundError):
-        return os.getenv("GOOGLE_API_KEY")
-
-def extract_course_key(text: str) -> Optional[str]:
-    t = norm(text)
-    aliases = {
-        "pilate reformer": "reformer", "reformer": "reformer",
-        "pilate crossformer": "crossformer", "crossformer": "crossformer", "cross-former": "crossformer",
-        "boxe": "boxe", "cross training": "cross training", "cross core": "cross core", "cross body": "cross body",
-        "cross rox": "cross rox", "cross yoga": "cross yoga", "yoga vinyasa": "yoga vinyasa", "hatha": "hatha flow",
-        "classic pilates": "classic pilates", "power pilates": "power pilates", "core & stretch": "core & stretch",
-        "yoga kids": "yoga kids", "training kids": "training kids", "afrodance": "afrodance"
-    }
-    for k in sorted(aliases.keys(), key=len, reverse=True):
-        if k in t: return aliases[k]
-    return None
-
-def tag_to_pass_hint(tag: str) -> str:
-    mapping = {
-        "cross": "Pass Cross (ou Pass Full)",
-        "focus": "Pass Focus (ou Pass Full)",
-        "kids": "Pass Kids",
-        "reformer": "Pass Reformer",
-        "crossformer": "Pass Crossformer",
-    }
-    return mapping.get(tag, "selon la formule")
-
-# ==============================================================================
-# 6) INTENT DETECTION (ROBUSTE)
-# ==============================================================================
-
-def intent_human(text: str) -> bool:
-    t = norm(text)
-    return any(w in t for w in ["humain", "conseiller", "equipe", "équipe", "whatsapp", "telephone", "téléphone", "contact", "joindre", "parler a", "parler à"])
-
-def intent_suspension(text: str) -> bool:
-    t = norm(text)
-    return any(w in t for w in ["pause", "suspendre", "suspension", "arret", "arrêt", "vacance"])
-
-def intent_signup(text: str) -> bool:
-    t = norm(text)
-    signup_keywords = ["m'inscrire", "inscrire", "inscription", "s'inscrire", "creer un compte", "créer un compte", "nouvel adherent", "nouveau membre"]
-    app_keywords = ["identifiant", "mot de passe", "connexion", "connecter", "pas reçu mail", "pas recu mail"]
-    return any(w in t for w in signup_keywords + app_keywords)
-
-def intent_pricing(text: str) -> bool:
-    t = norm(text)
-    return any(w in t for w in ["prix", "tarif", "cout", "combien", "starter", "essai", "supp", "ajout", "abonnement", "pass"])
-
-def intent_planning(text: str) -> bool:
-    t = norm(text)
-    return any(w in t for w in ["planning", "horaire", "quand", "heure", "jour", "cours"])
-
-def intent_rules(text: str) -> bool:
-    t = norm(text)
-    return any(w in t for w in ["chaussette", "retard", "annul", "regle"])
-
-def intent_definition(text: str) -> bool:
-    t = norm(text)
-    return any(w in t for w in ["c'est quoi", "c quoi", "ça veut dire", "definition", "définition", "explique", "expliquer", "difference", "différence"])
-
-# ==============================================================================
-# 7) DETERMINISTIC RESPONSES (REPONSES EXACTES)
-# ==============================================================================
-
-def human_alert(reason: str = "") -> Tuple[str, bool]:
-    txt = reason.strip() if reason else "Je te mets directement avec l’équipe pour être sûr à 100% 🙂"
-    return txt, True
-
-def get_suspension_response() -> str:
-    return (
-        "🛑 **Mettre en pause son abonnement** :\n\n"
-        "1. **Avec l'Option Boost** : La suspension est libre, sans préavis et sans justificatif.\n"
-        "2. **Sans Option Boost (Standard)** : La suspension n'est possible que pour une absence **supérieure à 10 jours** et nécessite un **préavis d'1 mois**.\n\n"
-        "Pour activer une suspension, contactez-nous directement via WhatsApp."
-    )
-
-def get_signup_response() -> str:
-    return (
-        "📝 **Procédure d'inscription** :\n\n"
-        "1. Souscrivez votre abonnement en ligne sur notre site.\n"
-        "2. Après paiement, vous recevez un e-mail automatique avec vos identifiants.\n"
-        "3. Téléchargez l'application (SVB / Sportigo).\n"
-        "4. Connectez-vous avec les identifiants reçus.\n"
-        "5. Réservez vos séances sur le planning ! ✅\n\n"
-        "⚠️ *Mail non reçu ? Vérifiez les spams ou contactez-nous.*"
-    )
+    return "🤔 Je vois que tu parles de prix, mais pour quel cours ou quel abonnement ? (Ex: 'Prix Reformer 4' ou 'Prix Boxe')"
 
 def get_planning_response(text: str) -> str:
-    studio = detect_studio(text)
-    day = detect_day(text)
-    course_key = extract_course_key(text)
-    
-    if not studio and course_key:
-        if course_key in ["reformer", "crossformer", "yoga vinyasa", "hatha flow", "classic pilates", "power pilates", "core & stretch"]:
-            studio = "lavandieres"
-        elif course_key in ["boxe", "afrodance", "cross training", "cross core", "cross body", "cross rox", "training kids", "yoga kids"]:
-            studio = "docks"
+    t = normalize(text)
+    day = None
+    days_fr = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+    for d in days_fr:
+        if d in t: day = d
+    if "aujourd'hui" in t: day = get_current_day()
 
-    if not studio: 
-        return "Tu veux le planning de quel studio : **Docks** (Cross/Boxe) ou **Lavandières** (Reformer/Yoga) ?"
-    
+    studio = None
+    if "dock" in t or "boxe" in t or "training" in t or "afro" in t: studio = "docks"
+    if "lavandi" in t or "reformer" in t or "pilate" in t or "vinyasa" in t: studio = "lavandieres"
+
+    if not studio: return "📅 Tu cherches le planning de quel côté ? **Docks** ou **Lavandières** ?"
+
     res = []
-    days_to_show = [day] if day else DAY_ORDER
-    
-    studio_slots = PLANNING_DATA.get(studio, {})
-    
-    found_any = False
+    days_to_show = [day] if day else days_fr
     for d in days_to_show:
-        slots = studio_slots.get(d, [])
-        if course_key:
-            slots = [s for s in slots if course_key in norm(s[1])]
-            
+        slots = PLANNING_DB[studio].get(d, [])
         if slots:
-            found_any = True
-            lines = [f"{h} : {c}" for h, c, tag in slots]
-            res.append(f"**{d.capitalize()}** : {', '.join(lines)}")
-        elif day: 
-            res.append(f"Aucun cours de {course_key.capitalize() if course_key else ''} trouvé le **{d}** aux {STUDIOS[studio]['label']}.")
+            res.append(f"🗓️ **{d.capitalize()} aux {studio.capitalize()}** :")
+            for s in slots: res.append(f"- {s}")
             
-    if not found_any and not day:
-        return f"Je n'ai pas trouvé de cours correspondant à ta demande aux {STUDIOS[studio]['label']}."
-
-    return "\n\n".join(res)
-
-def answer_boxe_price() -> str:
-    return (
-        f"Un cours de **Boxe** :\n"
-        f"- Sans abonnement : **{eur(UNIT_PRICE['training'])}**\n"
-        f"- Si tu es abonné(e) : ça dépend de ton pass (au **prorata** : prix du pass / nb sessions). "
-        f"Dis-moi juste ton pass et ton nombre de sessions (ex: *Pass Focus 4*) et je te calcule."
-    )
-
-def get_price_response(text: str) -> str:
-    t = norm(text)
-    if "supp" in t or "ajout" in t:
-        pk = find_pass_key(text)
-        n = find_sessions(text)
-        if pk == "kids": return f"Séance supp Kids : **{eur(KIDS_EXTRA)}**."
-        if pk and n:
-            p = PASS[pk]
-            return f"Séance supp ({p.label} {n}) : **{eur(p.prices[n].total/n)}** (prorata)."
-        return "Pour la séance supp, dis-moi ton pass et le nombre de sessions (ex: 'supp cross 4')."
-    
-    if "starter" in t: return f"⭐ **Starter** : {eur(STARTER['price'])} ({STARTER['sessions']} sessions, 1 mois)."
-    if "essai" in t: return f"Essai : **{eur(TRIAL['price'])}** (remboursé si inscription)."
-    if "boost" in t: return f"⚡ **Option Boost** : {eur(BOOST['price'])}/mois."
-    if "unit" in t or "sans abo" in t: return f"Unité : Training **{eur(UNIT_PRICE['training'])}**, Machine **{eur(UNIT_PRICE['machine'])}**."
-
-    # Pass prices
-    pk = find_pass_key(text)
-    n = find_sessions(text)
-    if pk and n:
-        if n in PASS[pk].prices:
-            return f"📌 **{PASS[pk].label} {n} sessions** : **{eur(PASS[pk].prices[n].total)}** / mois."
-            
-    return "Je n'ai pas compris quel tarif tu cherches. Peux-tu préciser (ex: 'Pass Cross 4 sessions') ?"
-
-def get_rules_response(text: str) -> str:
-    t = norm(text)
-    if "chaussette" in t: return "🧦 Chaussettes antidérapantes **obligatoires** aux Lavandières (vente 10€, prêt 3€)."
-    if "retard" in t: return "⏱️ **5 min de tolérance** max, ensuite porte fermée."
-    if "annul" in t: return "Annulation : **1h** avant (collectif) ou **24h** (privé) sinon perdu."
-    return "Peux-tu préciser ta question sur le règlement ?"
-
-def get_definition_response(text: str) -> Optional[str]:
-    t = norm(text)
-    if "difference" in t or "différence" in t:
-        if "reformer" in t and "crossformer" in t:
-            return "Différence **Reformer vs Crossformer** :\n- **Reformer** : Pilates machine contrôlé, top pour la posture/gainage.\n- **Crossformer** : Pilates machine **cardio/intense**, ça transpire plus !"
-    
-    ck = extract_course_key(text)
-    defs = {
-        "reformer": "Le **Reformer** est une machine à ressorts pour travailler le Pilates en profondeur (gainage, posture).",
-        "crossformer": "Le **Crossformer** est une version cardio et intense du Pilates sur machine.",
-        "cross training": "Le **Cross Training** est un circuit haute intensité (cardio + renfo).",
-        "boxe": "La **Boxe** chez SVB est cardio et technique, sur sacs (pas de coups reçus).",
-        "yoga vinyasa": "Le **Vinyasa** est un yoga dynamique où on enchaîne les postures."
-    }
-    if ck in defs:
-        return defs[ck]
-    return None
+    return "\n".join(res) if res else f"Aucun cours trouvé le {day}."
 
 # ==============================================================================
-# 8) MAIN LOGIC (ROUTER)
+# 4) ROUTEUR PRINCIPAL
 # ==============================================================================
 
-def deterministic_router(text: str) -> Tuple[Optional[str], bool]:
-    t = norm(text)
-    # 0. Humain
-    if intent_human(text):
-        return human_alert("Ça marche, je te mets en relation avec l'équipe.")
-        
-    # 1. Suspension
-    if intent_suspension(text):
-        return get_suspension_response(), False
+def main_router(text: str) -> Tuple[str, bool]:
+    t = normalize(text)
     
-    # 2. Inscription
-    if intent_signup(text):
-        return get_signup_response(), False
+    if any(w in t for w in ["humain", "parler", "telephone", "probleme", "urgent"]):
+        return FAQ_DB["contact_humain"], True
+    
+    if any(w in t for w in ["garer", "parking"]): return FAQ_DB["parking"], False
+    if any(w in t for w in ["douche", "laver"]): return FAQ_DB["douche"], False
+    if any(w in t for w in ["tenue", "basket", "chaussure"]): return FAQ_DB["tenue"], False
+    if any(w in t for w in ["retard"]): return FAQ_DB["retard"], False
+    
+    if any(w in t for w in ["pause", "suspendre", "arret"]): return RULES["suspension_policy"], True
+    
+    # DÉTECTION PRIX AMÉLIORÉE (Si pass + nombre détectés, on force le prix même sans mot clé "prix")
+    pass_key, sessions = detect_pass_info(text)
+    if any(w in t for w in ["prix", "tarif", "cout", "combien", "coute"]) or (pass_key and sessions) or (pass_key and "prix" in t):
+        return get_pricing_response(text), False
         
-    # 3. Planning
-    if intent_planning(text) or extract_course_key(text): 
-        if not intent_pricing(text) and not intent_definition(text):
-            return get_planning_response(text), False
-        
-    # 4. Prix (Priorité Boxe)
-    if "boxe" in t and any(w in t for w in ["prix", "tarif", "cout", "combien"]):
-        return answer_boxe_price(), False
+    if any(w in t for w in ["quand", "heure", "planning", "cours", "jour"]) or detect_pass_info(text)[0]:
+        # Si on parle d'un cours mais pas de prix, c'est le planning
+        return get_planning_response(text), False
 
-    if intent_pricing(text):
-        return get_price_response(text), False
-        
-    # 5. Règles
-    if intent_rules(text):
-        return get_rules_response(text), False
-        
-    # 6. Définitions
-    if intent_definition(text):
-        r = get_definition_response(text)
-        if r: return r, False
-        
-    return None, False
+    return "GEMINI_FALLBACK", False
 
-def call_gemini(user_text: str, history: List[Dict[str, str]]) -> Tuple[str, bool]:
-    api_key = get_api_key()
+# ==============================================================================
+# 5) IA GENERATIVE
+# ==============================================================================
+
+def call_gemini_smart(user_text: str, history: List[Dict[str, str]]) -> Tuple[str, bool]:
+    api_key = st.secrets.get("GOOGLE_API_KEY", os.getenv("GOOGLE_API_KEY"))
     if not GEMINI_AVAILABLE or not api_key:
-        return "Je ne peux pas répondre intelligemment sans ma clé API 🧠. Contacte l'équipe !", True
+        return "Oups, je suis un peu perdue. Contacte l'équipe sur WhatsApp !", True
 
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel("gemini-2.5-flash")
 
-    # CERVEAU AMÉLIORÉ : INTELLIGENCE PSYCHOLOGIQUE
-    system_prompt = """
-    Tu es Sarah, l'assistante experte et empathique du studio SVB.
-    Ton but n'est pas juste de donner des infos, mais de COMPRENDRE le besoin caché du client.
-
-    🧠 TA MATRICE DE DÉDUCTION (Si le client dit ça -> Tu proposes ça) :
-    1. BESOIN : "Se défouler", "Stressé", "Journée horrible", "Énergie", "Transpirer", "Gants"
-       👉 SOLUTION : Propose les cours INTENSES aux DOCKS (Boxe, Cross Training).
-       👉 ARGUMENT : "Rien de mieux pour lâcher prise et tout oublier !"
-
-    2. BESOIN : "Mal au dos", "Reprise douce", "Enceinte", "Pas sportif", "Raide", "Souplesse"
-       👉 SOLUTION : Propose les cours DOUX/TECHNIQUES aux LAVANDIÈRES (Pilates Reformer, Yoga).
-       👉 ARGUMENT : "C'est idéal pour renforcer ton corps en profondeur sans chocs."
-
-    3. BESOIN : "Sculpter", "Tonifier", "Brûler", "Intense mais sans sauter partout"
-       👉 SOLUTION : Propose le CROSSFORMER (Lavandières) ou le CROSS BODY (Docks).
-
-    ⚠️ RÈGLES DE SÉCURITÉ ABSOLUES :
-    - Ne jamais inventer un prix (si tu ne l'as pas, dis "Je n'ai pas le tarif exact sous les yeux").
-    - Ne jamais inventer un horaire précis (si le client ne donne pas de jour, demande-lui "Tu préfères venir quel jour ?").
-    - Si la question est technique (appli qui bug, paiement), renvoie vers WhatsApp.
-
-    TON TON :
-    Chaleureux, pro, tutoiement respectueux (comme une coach).
+    sys_prompt = """
+    Tu es Sarah, la coach du studio SVB. Ton rôle : Comprendre l'état d'esprit du client et l'orienter.
+    Si le client veut se défouler -> Boxe/Cross Training.
+    Si le client veut du calme/dos -> Reformer/Yoga.
+    NE JAMAIS INVENTER DE PRIX. Si tu ne sais pas, dis de regarder le site.
     """
     
-    msgs = [{"role": "user", "parts": [system_prompt]}]
-    for m in history[-6:]:
-        role = "user" if m["role"] == "user" else "model"
-        msgs.append({"role": role, "parts": [m["content"]]})
+    msgs = [{"role": "user", "parts": [sys_prompt]}]
+    for m in history[-4:]:
+        msgs.append({"role": "user" if m["role"] == "user" else "model", "parts": [m["content"]]})
     msgs.append({"role": "user", "parts": [user_text]})
 
     try:
         resp = model.generate_content(msgs)
-        txt = resp.text.strip()
-        needs_wa = "whatsapp" in txt.lower() or "équipe" in txt.lower()
-        return txt, needs_wa
-    except Exception as e:
-        log.error(f"Gemini error: {e}")
-        return "Oups, je réfléchis trop... Un petit souci de connexion. Réessaie !", True
+        return resp.text.strip(), False
+    except:
+        return "J'ai un petit souci de connexion. Peux-tu répéter ?", True
 
 # ==============================================================================
-# 9) APP LOOP & UX
+# 6) INTERFACE
 # ==============================================================================
-
-def first_message() -> str:
-    variants = [
-        "Bonjour ! Je suis Sarah, l'assistante du studio SVB. Comment puis-je t'aider aujourd'hui ?",
-        "Hello ! Bienvenue chez SVB. Tu as une question sur le planning, les tarifs ou nos cours ?",
-        "Salut 🙂 Je suis là pour te renseigner sur le studio. Dis-moi ce que tu recherches !"
-    ]
-    return random.choice(variants)
 
 if "messages" not in st.session_state:
-    st.session_state.messages = []
-    st.session_state.messages.append({"role": "assistant", "content": first_message()})
+    st.session_state.messages = [{"role": "assistant", "content": "Hello ! Je suis Sarah. Prête à t'aider pour tes séances chez SVB ! 💪"}]
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("Pose ta question..."):
+if prompt := st.chat_input("Pose ta question ici..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # ROUTING
-    response_text, show_wa = deterministic_router(prompt)
+    response, show_wa = main_router(prompt)
+    if response == "GEMINI_FALLBACK":
+        response, show_wa = call_gemini_smart(prompt, st.session_state.messages)
 
-    # Fallback Gemini
-    if not response_text:
-        response_text, show_wa = call_gemini(prompt, st.session_state.messages)
-
-    st.session_state.messages.append({"role": "assistant", "content": response_text})
+    st.session_state.messages.append({"role": "assistant", "content": response})
     with st.chat_message("assistant"):
-        st.markdown(response_text)
+        st.markdown(response)
         if show_wa:
             st.markdown("---")
-            st.link_button(CONTACT["whatsapp_label"], CONTACT["whatsapp_url"])
+            st.link_button(CONTACT["whatsapp_label"] if "whatsapp_label" in CONTACT else "📞 WhatsApp", CONTACT["whatsapp"])
